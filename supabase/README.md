@@ -41,7 +41,9 @@ Then put the project URL, publishable key and secret key into `apps/web/.env.loc
 2. **URL Configuration**: Site URL = `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`). Redirect URLs: add
    `http://localhost:3000/auth/callback` and your production `/auth/callback`.
 3. **Emails → Magic Link** template: include the code so people can type it on the device where they started,
-   even if the email opens in another app. Recommended body:
+   even if the email opens in another app. Paste this body (also saved at
+   `supabase/templates/magic_link.html`). The local experimental stack cannot load that file,
+   so the sign-in page shows the code instead when `NEXT_PUBLIC_SUPABASE_URL` is on localhost:
 
    ```html
    <h2>Your BY Tickets sign-in code</h2>

@@ -83,7 +83,7 @@ Open http://localhost:3000. Database check: http://localhost:3000/api/health —
 ## 4. Sign in (proves a write)
 
 1. Open http://localhost:3000/login and enter your email.
-2. Open Mailpit at http://127.0.0.1:54324 and copy the 6-digit code. Mail stays on this machine; it is not delivered to a real inbox.
+2. The page shows a 6-digit code. The local stack cannot put that code in Mailpit (custom mail templates are unsupported there). On a hosted project the code arrives by email instead. Mailpit at http://127.0.0.1:54324 still keeps a magic link, which only works in the same browser that asked for it.
 3. Enter the code. The app writes a profile row, the `customer` role, and (when the encryption key is set) a custodial wallet.
 4. Open http://localhost:3000/account, edit your name, and save. That updates `profiles`.
 5. http://localhost:3000/organizer submits an organizer application (`organizers` insert).

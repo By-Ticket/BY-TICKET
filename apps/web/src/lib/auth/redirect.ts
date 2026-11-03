@@ -21,3 +21,14 @@ export const PROTECTED_PREFIXES = ["/tickets", "/rewards", "/account", "/organiz
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
+
+/** True for a Supabase URL on this machine. Local sign-in can show the email code on the page. */
+export function isLocalSupabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}

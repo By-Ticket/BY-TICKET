@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { publicEnv } from "@/lib/env";
 import { afterSignIn } from "@/lib/auth/bootstrap";
-import { safeNextPath } from "@/lib/auth/redirect";
+import { isLocalSupabaseUrl, safeNextPath } from "@/lib/auth/redirect";
 import { limitAction } from "@/lib/security/action-guard";
 import { supabaseConfigured } from "@/lib/supabase/client";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient, supabaseAdminConfigured } from "@/lib/supabase/server";
 import { emailSchema, otpSchema } from "@/lib/validation/account";
 
 export interface LoginState {
@@ -37,9 +37,29 @@ export async function authenticate(prev: LoginState, formData: FormData): Promis
     const limited = await limitAction("otp-send", { limit: 5, windowMs: 15 * 60_000, subject: email });
     if (limited) return { step: "email", email, error: limited };
 
-    const supabase = await createSupabaseServerClient();
     const callback = new URL("/auth/callback", publicEnv.NEXT_PUBLIC_APP_URL);
     callback.searchParams.set("next", next);
+    // The experimental local stack cannot serve a custom mail template, so Mailpit
+    // only gets a PKCE link. Ask Auth for the one-time code and show it here.
+    if (isLocalSupabaseUrl(publicEnv.NEXT_PUBLIC_SUPABASE_URL) && supabaseAdminConfigured) {
+      const admin = createSupabaseAdminClient();
+      const { data, error } = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: callback.toString() },
+      });
+      const code = data?.properties?.email_otp;
+      if (error || !code) {
+        console.error("local sign-in code failed", { status: error?.status, code: error?.code });
+        return { step: "email", email, error: "We couldn't create a sign-in code. Check that the local Supabase stack is running." };
+      }
+      return {
+        step: "code",
+        email,
+        message: `Your local sign-in code is ${code}. Enter it below. It is not emailed, because this local stack cannot put the code in Mailpit.`,
+      };
+    }
+    const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: true, emailRedirectTo: callback.toString() },

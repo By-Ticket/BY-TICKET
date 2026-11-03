@@ -243,10 +243,10 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Custom HTML templates are not loaded while [experimental] stack = true
+# (the error is "content_path requires template serving"). Hosted projects
+# should paste supabase/templates/magic_link.html into the Magic Link template.
+# Locally, the sign-in page shows the code. See apps/web login actions.
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
