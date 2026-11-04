@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 /** Temporary page body for routes whose features land in a later build phase. */
@@ -17,23 +17,22 @@ export function PhasePlaceholder({
   features: string[];
 }) {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <Card className="bg-chitenge">
+    <div className="mx-auto max-w-xl px-4 py-8">
+      <div className="mb-4 flex items-center gap-2">
+        <Icon className="size-5" aria-hidden />
+        <h1 className="text-[28px] leading-8 font-semibold">{title}</h1>
+      </div>
+      <Card>
         <CardHeader>
-          <div className="bg-primary/15 text-primary mb-2 flex size-12 items-center justify-center rounded-2xl">
-            <Icon className="size-6" aria-hidden />
-          </div>
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="font-heading text-2xl">{title}</CardTitle>
+            <CardTitle>{description}</CardTitle>
             <Badge variant="secondary">Phase {phase}</Badge>
           </div>
-          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="text-muted-foreground space-y-2 text-sm">
+          <ul className="divide-y divide-border border-t border-border">
             {features.map((f) => (
-              <li key={f} className="flex gap-2">
-                <span className="bg-copper mt-1.5 size-1.5 shrink-0 rounded-full" aria-hidden />
+              <li key={f} className="text-muted-foreground py-3 text-[15px] leading-5">
                 {f}
               </li>
             ))}

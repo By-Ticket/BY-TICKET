@@ -29,7 +29,7 @@ export default async function AccountPage() {
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-heading text-3xl font-extrabold">Your account</h1>
+          <h1 className="text-[28px] leading-8 font-semibold">Your account</h1>
           <p className="text-muted-foreground text-sm">{viewer.email}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {viewer.roles.map((r) => (
@@ -60,7 +60,7 @@ export default async function AccountPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="text-sun size-5" aria-hidden />
+            <Wallet className="size-5" aria-hidden />
             Wallets
           </CardTitle>
           <CardDescription>
