@@ -1,3 +1,4 @@
+# Unused. This project does not use Docker (see docs/DECISIONS.md D-032, D-034).
 # Soroban toolchain container. Usage (from repo root):
 #   docker compose run --rm soroban cargo test
 #   docker compose run --rm soroban stellar contract build

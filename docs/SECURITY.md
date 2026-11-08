@@ -8,7 +8,7 @@
 | `STELLAR_PLATFORM_SECRET` | server env only (testnet); KMS on mainnet | fee sponsorship, custodial account creation | new keypair → update signer on platform account |
 | `CUSTODIAL_KEY_ENCRYPTION_KEY` | server env only; KMS on mainnet | AES-256-GCM encryption of custodial wallet secrets | key version prefix on ciphertext; re-encrypt job |
 | `QR_CREDENTIAL_SIGNING_KEY` | server env only | signs ticket credentials | publish new public key; scanners accept old+new during overlap |
-| Contract deployer / admin | `stellar keys` identity `by-deployer`, stored in the `by-stellar-config` Docker volume, **not** in `.env` or the repo (`by-usdc-issuer` and the `by-smoke-*` test identities live there too) | deploy + admin calls | transfer admin role to a multisig account before mainnet |
+| Contract deployer / admin | Stellar CLI identity `by-deployer` in the local keystore, **not** in `.env` or the repo. The original testnet admin and `by-usdc-issuer` were created in the unused Docker keystore and are not held by the app | deploy + admin calls | transfer admin role to a multisig account before mainnet |
 
 Rules:
 1. **Never** put a secret in a `NEXT_PUBLIC_*` variable — those are inlined into browser JS.
@@ -62,6 +62,6 @@ fields, double check-in, double orders, storage paths).
 | Double-spend of points | SEP-41 balances on-chain; redemption burns atomically |
 | Scalping | `max_transfers`, `resale_cap` enforced on-chain |
 | Brute force / abuse | per-IP + per-user rate limiting on auth, purchase and check-in endpoints |
-| Linking someone else's wallet | Freighter must sign a one-time server challenge (SEP-53) naming our domain, the wallet, the network and a 5-minute expiry; the challenge is claimed with a single conditional `UPDATE`, so it can't be replayed; a wallet can belong to only one account |
+| Linking someone else's wallet | The wallet must sign a one-time server challenge naming our domain, the wallet, the network, the purpose (login or link) and a 5-minute expiry; the challenge is claimed with a single conditional `UPDATE`, so it can't be replayed; a wallet can belong to only one account |
 | Data leakage between tenants | Postgres row-level security on every table; organizers see only their events |
 | Injection / malformed input | zod validation on every route handler and server action |

@@ -39,9 +39,28 @@ describe("wallet ownership proof", () => {
   });
 
   it("puts the domain, wallet, network and expiry in the signed text", () => {
+    expect(message).toContain("BY Tickets: link this Stellar wallet to your account.");
     expect(message).toContain("Domain: localhost:3000");
     expect(message).toContain(`Wallet: ${wallet.publicKey()}`);
     expect(message).toContain("Network: Test SDF Network ; September 2015");
     expect(message).toContain("Expires: 2026-10-26T12:00:00.000Z");
+  });
+
+  it("accepts a signature over the raw UTF-8 message", () => {
+    const sig = Buffer.from(wallet.sign(Buffer.from(message, "utf8"))).toString("base64");
+    expect(verifyWalletSignature(wallet.publicKey(), message, sig)).toBe(true);
+  });
+
+  it("names sign-in in the login challenge text", () => {
+    const login = walletChallengeMessage({
+      purpose: "login",
+      domain: "localhost:3000",
+      publicKey: wallet.publicKey(),
+      networkPassphrase: "Test SDF Network ; September 2015",
+      nonce: "b".repeat(64),
+      expiresAt: new Date("2026-10-26T12:00:00.000Z"),
+    });
+    expect(login).toContain("BY Tickets: sign in with this Stellar wallet.");
+    expect(login).not.toContain("link this Stellar wallet");
   });
 });

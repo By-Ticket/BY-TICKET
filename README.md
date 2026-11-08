@@ -32,26 +32,26 @@ friendly to low-bandwidth connections.
 │       ├── app/              routes + api/health
 │       ├── components/       ui/ (shadcn), layout/, brand/
 │       └── lib/              env, stellar/, supabase/, payments/, security/
-├── contracts/                Soroban Cargo workspace (built and tested in Docker)
-│   ├── Dockerfile            Rust 1.92 + wasm32v1-none + Stellar CLI 28.1
+├── contracts/                Soroban Cargo workspace (host Rust + Stellar CLI)
+│   ├── Dockerfile            unused; do not build contracts in Docker
 │   ├── event_ticket/         events, tiers, tickets, transfers, check-in, revenue split
 │   ├── rewards/              BY Points (SEP-41 token) + perks
 │   ├── attendance_badge/     proof-of-attendance badges
 │   └── deployments/          testnet.json (deployed contract IDs + wasm hashes)
 ├── supabase/                 migrations/ (schema, RLS, RPCs, storage), tests/ (RLS suite), seed.sql
-├── scripts/                  gen-secrets.mjs, deploy-testnet.sh, smoke-testnet.sh
-├── docker-compose.yml        `soroban` toolchain service
+├── scripts/                  contracts.ps1, gen-secrets.mjs, deploy-testnet.sh, smoke-testnet.sh
+├── docker-compose.yml        unused; do not use Docker in this project
 └── docs/                     ARCHITECTURE · CONTRACTS · API · SECURITY · DECISIONS · ROADMAP
 ```
 
 ## Prerequisites
 
 - **Node.js ≥ 20.9** (22 LTS recommended)
-- **Docker Desktop** for contracts: Rust, the WASM target and the Stellar CLI all live in the `soroban` image,
-  so you don't install them locally. (Native Rust also works if you prefer: Rust ≥ 1.91, `wasm32v1-none`,
-  Stellar CLI 28; see DECISIONS D-014 for the Windows caveats.)
-- The **Supabase CLI** (2.122+) for a local database. Docker is optional: without it the CLI runs Postgres, Auth, and the API as local processes. A hosted Supabase project works too. See [SETUP.md](SETUP.md).
-- **Freighter** browser extension, set to *Testnet*, for wallet testing
+- **Rust ≥ 1.91** with the MSVC host and the `wasm32v1-none` target, plus the **Windows SDK** (the linker needs
+  `kernel32.lib`). **Stellar CLI 28.1.0** on `PATH` or in `%USERPROFILE%\.local\bin`. **Git for Windows** for
+  deploy and smoke. See DECISIONS D-034. Do not use Docker for contracts.
+- The **Supabase CLI** (2.122+) for a local database, or a hosted Supabase project. See [SETUP.md](SETUP.md).
+- **Freighter** or another recognized Stellar wallet, set to *Testnet*, for wallet testing
 
 ## Quick start
 
@@ -62,8 +62,8 @@ npm run setup
 # 2. (optional) fund the platform account on testnet via Friendbot
 npm run secrets -- --fund
 
-# 3. contracts (Docker): build the toolchain image once, test, deploy to testnet
-npm run contracts:image
+# 3. contracts (host Rust + Stellar CLI — no Docker)
+npm run contracts:doctor
 npm run contracts:test
 npm run contracts:deploy   # writes contract IDs into apps/web/.env.local
 npm run contracts:smoke    # optional: live end-to-end purchase → check-in on testnet
@@ -101,16 +101,15 @@ Every variable is documented in [`apps/web/.env.example`](apps/web/.env.example)
 | `npm run dev` / `build` / `start` | Next.js app |
 | `npm run typecheck` / `lint` | TypeScript + ESLint |
 | `npm test` | web unit tests (Vitest): key encryption, redirects, validation |
-| `npm run db:test` | apply all migrations to a throwaway Postgres (Docker) and run the RLS test suite |
+| `npm run db:test` | not run locally; migrations are applied through Supabase |
 | `npm run db:types` | regenerate `database.types.ts` from the migrations |
-| `npm run contracts:image` | build the `soroban` Docker toolchain image |
-| `npm run contracts:test` | `cargo test` for all contracts (in Docker) |
+| `npm run contracts:doctor` | print `rustc`, `cargo`, and `stellar` versions |
+| `npm run contracts:test` | `cargo test` for all contracts |
 | `npm run contracts:lint` | `cargo fmt --check` + `clippy -D warnings` |
 | `npm run contracts:build` | `stellar contract build` → WASM |
 | `npm run contracts:deploy` | deploy to testnet, write IDs to `apps/web/.env.local` + `contracts/deployments/testnet.json` |
 | `npm run contracts:smoke` | live testnet end-to-end check (buy, split, check-in, replay rejected, points, badge) |
-| `npm run contracts:shell` | shell inside the toolchain container (`stellar …`, `cargo …`) |
-| `npm run check` | typecheck + lint + unit tests + contract tests + RLS tests |
+| `npm run check` | typecheck + lint + unit tests + contract tests |
 
 ## Deploy
 
@@ -118,21 +117,20 @@ Every variable is documented in [`apps/web/.env.example`](apps/web/.env.example)
   (it becomes the contract admin), builds the WASM, deploys a mock `USDC` asset contract, `rewards`,
   `attendance_badge` and `event_ticket`, registers `event_ticket` as minter, adds the treasury's USDC
   trustline, then writes the IDs into `apps/web/.env.local`. It's safe to re-run: each run deploys fresh
-  instances. Options: `USDC_MODE=circle`, `FEE_BPS=250`, `ORGANIZER=G…`
-  (e.g. `docker compose run --rm -e ORGANIZER=G... soroban bash /work/scripts/deploy-testnet.sh`).
+  instances. Options: `USDC_MODE=circle`, `FEE_BPS=250`, `ORGANIZER=G…`.
   Full interface: [docs/CONTRACTS.md](docs/CONTRACTS.md).
 - **Database:** apply `supabase/migrations` in order (Supabase MCP, `supabase db push`, or the SQL editor) and
   configure Auth as described in [supabase/README.md](supabase/README.md).
-- **Web:** Render free web service ([`render.yaml`](render.yaml)) or Netlify's Next.js runtime
-  ([`netlify.toml`](netlify.toml)). The app is one Node server, so Cloudflare Pages is not the target.
-  Database is hosted Supabase (Auth + RLS + Storage), not a bare Postgres URL. Exact steps and every
-  env var: [SETUP.md](SETUP.md). `NEXT_PUBLIC_*` values are baked in at build time, so redeploy after changing them.
+- **Web:** Vercel ([`vercel.json`](vercel.json) — Next.js service `web` at `apps/web`), Render
+  ([`render.yaml`](render.yaml)), or Netlify ([`netlify.toml`](netlify.toml)). Database is hosted
+  Supabase. Exact steps and every env var: [SETUP.md](SETUP.md). `NEXT_PUBLIC_*` values are baked in
+  at build time, so redeploy after changing them.
 
 ## Security
 
-Keys and secrets are never committed and never put in `NEXT_PUBLIC_*` variables. Deployer/admin, USDC-issuer and
-smoke-test keys live in the Stellar CLI keystore inside the `by-stellar-config` Docker volume, not in `.env` or
-the repo. Removing that volume (`docker volume rm`) loses the testnet admin key, so you'd have to redeploy.
+Keys and secrets are never committed and never put in `NEXT_PUBLIC_*` variables. Deployer, USDC-issuer, and
+smoke-test keys are Stellar CLI identities in the local keystore, not in `.env` or the repo. The original
+testnet admin was created in a Docker keystore this project no longer uses, so it is not available here.
 See [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Notes for this machine
@@ -140,6 +138,12 @@ See [docs/SECURITY.md](docs/SECURITY.md).
 This repo currently sits in a **OneDrive-synced folder**. That works, but `node_modules`, `.next` and
 `contracts/target` make sync slow and can cause file-lock errors. Prefer moving the repo outside OneDrive
 (e.g. `C:\dev\by-tickets`) or excluding those folders from sync.
+
+On this PC the MSVC linker and Stellar CLI 28.1.0 are installed. Windows Application Control (os error 4551)
+still blocks Cargo from running the unsigned build scripts it compiles, so `npm run contracts:test` and
+`npm run contracts:build` stop there until that policy allows them. Run the command in your own terminal to
+confirm. Smart App Control is the usual cause (Windows Security → App & browser control). Turning it off is
+permanent until Windows is reinstalled.
 
 ## Docs
 

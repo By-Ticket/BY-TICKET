@@ -3,7 +3,10 @@ import { Keypair, StrKey } from "@stellar/stellar-sdk";
 
 export const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;
 
+export type WalletChallengePurpose = "link" | "login";
+
 export interface WalletChallenge {
+  purpose?: WalletChallengePurpose;
   domain: string;
   publicKey: string;
   networkPassphrase: string;
@@ -12,12 +15,16 @@ export interface WalletChallenge {
 }
 
 /**
- * The exact text the wallet signs. Binding the domain, network and expiry means a signature
- * collected by another site, for another network, or after expiry never links a wallet here.
+ * The exact text the wallet signs. Binding the domain, network, purpose and expiry means a
+ * signature collected by another site, for another network, or after expiry never works here.
  */
 export function walletChallengeMessage(c: WalletChallenge): string {
+  const headline =
+    c.purpose === "login"
+      ? "BY Tickets: sign in with this Stellar wallet."
+      : "BY Tickets: link this Stellar wallet to your account.";
   return [
-    "BY Tickets: link this Stellar wallet to your account.",
+    headline,
     "Only sign this on the BY Tickets website. It does not move any funds.",
     "",
     `Domain: ${c.domain}`,
@@ -44,16 +51,20 @@ export function decodeSignature(signature: string): Buffer | null {
 
 /**
  * Verify a wallet signature over `message`. Current Freighter signs the SEP-53 hash; older
- * releases signed SHA-256(message). Both cover the full challenge text, so either proves control.
+ * releases signed SHA-256(message); some wallets sign the UTF-8 bytes. All cover the full
+ * challenge text, so any of them proves control.
  */
 export function verifyWalletSignature(publicKey: string, message: string, signature: string): boolean {
   if (!StrKey.isValidEd25519PublicKey(publicKey)) return false;
   const sig = decodeSignature(signature);
   if (!sig) return false;
   const keypair = Keypair.fromPublicKey(publicKey);
+  const payload = Buffer.from(message, "utf8");
   try {
     return (
-      keypair.verify(sep53Hash(message), sig) || keypair.verify(sha256(Buffer.from(message, "utf8")), sig)
+      keypair.verify(sep53Hash(message), sig) ||
+      keypair.verify(sha256(payload), sig) ||
+      keypair.verify(payload, sig)
     );
   } catch {
     return false;

@@ -4,8 +4,9 @@ import { ExternalLink, LogOut, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConnectFreighter } from "@/components/wallet/connect-freighter";
+import { ConnectStellarWallet } from "@/components/wallet/connect-stellar";
 import { RemoveWalletButton } from "@/components/wallet/remove-wallet-button";
+import { isStellarWalletEmail } from "@/lib/auth/stellar-wallet";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { requireViewer } from "@/lib/auth/session";
 import { explorerUrl } from "@/lib/stellar/config";
@@ -30,7 +31,9 @@ export default async function AccountPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[28px] leading-8 font-semibold">Your account</h1>
-          <p className="text-muted-foreground text-sm">{viewer.email}</p>
+          <p className="text-muted-foreground text-sm">
+            {isStellarWalletEmail(viewer.email) ? "Signed in with a Stellar wallet" : viewer.email}
+          </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {viewer.roles.map((r) => (
               <Badge key={r} variant={r === "customer" ? "secondary" : "outline"}>
@@ -74,7 +77,7 @@ export default async function AccountPage() {
           )}
           {(wallets ?? []).map((w) => (
             <div key={w.id} className="bg-muted/40 flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
-              <span className="font-medium">{w.kind === "custodial" ? "BY Tickets wallet" : "Freighter"}</span>
+              <span className="font-medium">{w.kind === "custodial" ? "BY Tickets wallet" : "Stellar wallet"}</span>
               {w.is_primary && <Badge variant="secondary">Primary</Badge>}
               {w.kind === "custodial" && !w.activated_at && <Badge variant="outline">Activates on first purchase</Badge>}
               {w.kind === "freighter" && w.verified_at && <Badge variant="outline">Verified</Badge>}
@@ -92,10 +95,10 @@ export default async function AccountPage() {
           ))}
           <div className="space-y-1 pt-2">
             <p className="text-muted-foreground text-xs">
-              Have a Stellar wallet? Link Freighter to pay with it and keep tickets in your own wallet. You&apos;ll sign
-              a one-time message; it doesn&apos;t move any funds.
+              Have a Stellar wallet? Link it to pay with it and keep tickets there. You&apos;ll sign a one-time message;
+              it doesn&apos;t move any funds.
             </p>
-            <ConnectFreighter />
+            <ConnectStellarWallet mode="link" />
           </div>
         </CardContent>
       </Card>

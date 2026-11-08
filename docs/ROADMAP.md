@@ -7,7 +7,7 @@
 | 1 | Scaffold, folder structure, env setup, README | ✅ done |
 | 2 | Soroban contracts + tests + testnet deploy | ✅ done |
 | 3 | Database schema (Supabase + RLS) + auth | ✅ done (migrations to be applied to the Supabase project) |
-| 4 | Wallet connection (Freighter + custodial) + ticket purchase | ⏳ next |
+| 4 | Wallet connection (Freighter + custodial) + ticket purchase | ⏳ wallet login + checkout built; a buy needs test USDC from the token issuer |
 | 5 | My Tickets, rotating signed QR, offline scanner check-in | ⬜ |
 | 6 | Organizer dashboard (events, tiers, analytics, payouts, rules) | ⬜ |
 | 7 | Rewards (BY Points) + proof-of-attendance badges | ⬜ |

@@ -10,6 +10,13 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  transpilePackages: ["@creit.tech/stellar-wallets-kit"],
+  allowedDevOrigins: ["*.trycloudflare.com"],
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["*.trycloudflare.com"],
+    },
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

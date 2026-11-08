@@ -2,9 +2,8 @@
 # Build and deploy the BY Tickets contracts to Stellar TESTNET, wire them together,
 # and write the resulting IDs into apps/web/.env.local.
 #
-# Run inside the toolchain container (from the repo root):
-#   docker compose run --rm soroban bash /work/scripts/deploy-testnet.sh
-#   (or: npm run contracts:deploy)
+# From the repo root: npm run contracts:deploy
+# (Git Bash + Stellar CLI + Rust on the host. Does not use Docker.)
 #
 # Options (env vars):
 #   DEPLOYER=by-deployer      Stellar CLI identity used as deployer + contract admin
@@ -12,12 +11,12 @@
 #   FEE_BPS=250               platform fee (falls back to PLATFORM_FEE_BPS in .env.local)
 #   ORGANIZER=G...            optionally approve this organizer right away
 #
-# Keys: the deployer/admin and the mock-USDC issuer are Stellar CLI identities stored in the
-# `by-stellar-config` Docker volume — never in the repo or .env. Every run deploys FRESH contracts.
+# Keys: the deployer/admin and the mock-USDC issuer are Stellar CLI identities in the
+# local keystore — never in the repo or .env. Every run deploys FRESH contracts.
 set -euo pipefail
 
 NETWORK=testnet
-ROOT=/work
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/apps/web/.env.local"
 WASM_DIR="$ROOT/contracts/target/wasm32v1-none/release"
 DEPLOYER="${DEPLOYER:-by-deployer}"

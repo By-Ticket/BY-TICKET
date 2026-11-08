@@ -3,11 +3,12 @@
 # approve organizer -> create event -> buy ticket (USDC split) -> check in -> replay rejected
 # -> points + badge awarded. Uses throwaway `by-smoke-*` identities.
 #
-#   docker compose run --rm soroban bash /work/scripts/smoke-testnet.sh
+#   npm run contracts:smoke
 set -euo pipefail
 
 NETWORK=testnet
-DEPLOYMENTS=/work/contracts/deployments/testnet.json
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEPLOYMENTS="$ROOT/contracts/deployments/testnet.json"
 DEPLOYER="${DEPLOYER:-by-deployer}"
 
 TIX=$(jq -r .contracts.event_ticket "$DEPLOYMENTS")

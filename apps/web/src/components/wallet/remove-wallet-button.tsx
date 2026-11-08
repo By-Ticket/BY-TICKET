@@ -10,7 +10,7 @@ export function RemoveWalletButton({ walletId }: { walletId: string }) {
   const [pending, startTransition] = useTransition();
 
   const remove = () => {
-    if (!window.confirm("Unlink this Freighter wallet from BY Tickets? Tickets already in it stay in it.")) return;
+    if (!window.confirm("Unlink this Stellar wallet from BY Tickets? Tickets already in it stay in it.")) return;
     startTransition(async () => {
       const result = await removeFreighterWallet(walletId);
       if (result.ok) toast.success("Wallet unlinked");
@@ -19,7 +19,7 @@ export function RemoveWalletButton({ walletId }: { walletId: string }) {
   };
 
   return (
-    <Button type="button" variant="ghost" size="icon-sm" onClick={remove} disabled={pending} aria-label="Unlink wallet">
+    <Button type="button" variant="ghost" size="icon-sm" onClick={remove} disabled={pending} aria-label="Unlink Stellar wallet">
       {pending ? <Loader2 className="animate-spin" aria-hidden /> : <Unlink aria-hidden />}
     </Button>
   );

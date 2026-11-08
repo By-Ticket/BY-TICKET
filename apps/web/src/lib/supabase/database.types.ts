@@ -1106,8 +1106,9 @@ export type Database = {
           id: string
           nonce: string
           public_key: string
+          purpose: string
           used_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1115,8 +1116,9 @@ export type Database = {
           id?: string
           nonce: string
           public_key: string
+          purpose?: string
           used_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1124,8 +1126,9 @@ export type Database = {
           id?: string
           nonce?: string
           public_key?: string
+          purpose?: string
           used_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

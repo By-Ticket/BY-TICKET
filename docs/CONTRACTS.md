@@ -142,7 +142,7 @@ fail with `NonTransferable` until the admin calls `set_transferable(true)`. Burn
 
 ## Building, testing, deploying
 
-All contract tooling runs in Docker (see README):
+Contract tooling runs on the host (see README). No Docker:
 
 ```bash
 npm run contracts:test     # cargo test (53 tests)
@@ -152,6 +152,6 @@ npm run contracts:deploy   # deploy all three + mock USDC to testnet, write IDs 
 npm run contracts:smoke    # end-to-end purchase → check-in → points/badge on testnet
 ```
 
-Deploy options (env vars passed into the container): `USDC_MODE=mock|circle` (default `mock`: a test `USDC`
+Deploy options (env vars): `USDC_MODE=mock|circle` (default `mock`: a test `USDC`
 asset the deployer can mint; `circle` uses Circle's testnet USDC), `FEE_BPS`, `PURCHASE_POINTS_PER_UNIT`,
 `ATTENDANCE_POINTS`, `ORGANIZER=G…` (approve an organizer right after deploying).

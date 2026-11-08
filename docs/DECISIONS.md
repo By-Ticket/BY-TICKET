@@ -77,7 +77,7 @@ set `UPSTASH_REDIS_REST_URL`/`_TOKEN`.
 Uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (`sb_publishable_…`) and `SUPABASE_SECRET_KEY` (`sb_secret_…`).
 Legacy `anon` / `service_role` JWT keys work in the same variables.
 
-### D-014 Contract toolchain runs in Docker (resolved in Phase 2)
+### D-014 Contract toolchain runs in Docker (superseded by D-034)
 Found during Phase 1: the Windows MSVC toolchain had no linker (VS installed without the C++ workload), and with
 the GNU toolchain `cargo test` was blocked by Windows **Application Control (os error 4551)**, which refuses the
 unsigned build-script binaries Cargo compiles.
@@ -164,7 +164,7 @@ in query plans.
 ### D-025 Email one-time code as the default sign-in
 Many users open email in a different app from their browser (Gmail app vs Chrome), which breaks PKCE magic
 links. So the login form asks for the 6-digit code; the email also carries a cross-device `/auth/confirm` link
-(template in `supabase/README.md`). No passwords. Wallet sign-in (Freighter, signed challenge) comes in Phase 4
+(template in `supabase/README.md`). No passwords. Wallet sign-in is a signed challenge (D-035)
 using `wallet_challenges`.
 
 ### D-026 Custodial wallet provisioned at first sign-in, activated on first purchase
@@ -200,16 +200,42 @@ signup trigger functions. The advisor still lists `my_organizer`, `resubmit_orga
 that's intended, since they are the app's RPCs and check the caller themselves. The 0008 notices ("RLS enabled,
 no policy") on `custodial_keys`, `wallet_challenges`, `idempotency_keys` and `chain_cursors` are also intended.
 
-### D-031 Freighter wallets are linked by signing a one-time message
-`/account` → Connect Freighter: the server issues a challenge (32-byte nonce, 5-minute expiry, stored in
-`wallet_challenges`), Freighter signs it with `signMessage` (SEP-53 hash; older Freighter's plain SHA-256 is also
-accepted since both cover the whole text), and the server claims the challenge in one conditional `UPDATE`
-before verifying and inserting the wallet. The signed text names the domain, wallet and network, so a signature
-can't be reused elsewhere. Linking writes `audit_log`. Max 3 Freighter wallets per account; the custodial wallet
-can't be removed. No on-chain transaction is needed to link, so it costs nothing.
+### D-031 External Stellar wallets are proven by signing a one-time message
+`/login` and `/account` open Stellar Wallets Kit (Freighter, xBull, Albedo, LOBSTR, Rabet, and other default
+modules). The server issues a challenge (32-byte nonce, 5-minute expiry, stored in `wallet_challenges` with
+`purpose` `login` or `link`). The wallet signs it (`signMessage`: SEP-53 hash, SHA-256 of the text, or raw UTF-8
+are accepted). The server claims the challenge in one conditional `UPDATE` before verifying. The signed text names
+the domain, wallet, network and purpose, so a signature can't be reused elsewhere. Linking writes `audit_log`.
+Max 3 external wallets per account; the custodial wallet can't be removed. No on-chain transaction is needed.
 
 ### D-032 No Docker going forward
 The user asked not to use Docker in this project. Supabase work goes through the Supabase MCP (migrations,
-advisors, type generation). The Docker-based scripts (`contracts:*`, `db:test`, `db:types`) are still in the repo
-and still pending a replacement decision: where contracts are built and tested (D-014), how the RLS suite runs,
-and where the contract admin key currently in the `by-stellar-config` volume should live.
+advisors, type generation). Contract build and test use the host toolchain (D-034). `npm run db:test` no longer
+starts a container; the RLS suite has no local runner. The original testnet admin and mock-USDC issuer keys
+remain in the unused `by-stellar-config` volume and are not available to the app.
+
+### D-033 Checkout sells the existing testnet event
+Phase 4 lists and sells chain event `1` (Copperbelt Night Live, 100 test USDC, already created by the
+smoke test). The contract admin key is not on this machine, so the app does not create a new
+on-chain event. Buying pulls USDC from the payer inside `mint_ticket`. The mock USDC `mint` requires the
+issuer `GB4RGUGQOUHQXDYV4YJGKXYT7WF5HLCMBSSYDCWHFJ5QAOZ2KYYYXLHG`, which the app does not hold, so a
+wallet with no test USDC cannot complete checkout until that issuer signs a mint. The custodial wallet is
+created and given a USDC trustline by the platform account. Mobile money uses the in-memory stub: it
+settles without contacting a phone, then the platform account pays.
+
+### D-034 Contracts build on the host
+D-014 is retired. `npm run contracts:test`, `contracts:lint`, and `contracts:build` call
+`scripts/contracts.ps1`, which uses Rust stable (MSVC), the `wasm32v1-none` target, and Stellar CLI 28.1.0.
+The Windows SDK 10.0.26100 supplies `kernel32.lib` so the MSVC linker can run. The Stellar CLI binary lives in
+`%USERPROFILE%\.local\bin` and is not committed. Deploy and smoke run the existing bash scripts through Git Bash,
+with the repo root detected from the script path.
+Windows Application Control (os error 4551) still refuses to execute the unsigned build-script programs Cargo
+compiles, on both the GNU and MSVC toolchains. Until that policy allows those programs, a host build stops at
+the first build script. The GNU toolchain is not a workaround.
+
+### D-035 Sign in with a Stellar wallet
+`/login` can create a session from a signed login challenge. If the public key is already linked, that account
+is signed in. If it isn't, the server creates an Auth user with a never-deliverable `{g-address}@wallets.invalid`
+email (confirmed immediately; no mail is sent), inserts the wallet as `kind=freighter`, then establishes a
+Supabase session with `generateLink` + `verifyOtp`. Email OTP sign-in stays. The same wallet cannot belong to two
+accounts.

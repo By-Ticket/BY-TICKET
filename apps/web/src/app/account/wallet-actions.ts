@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireViewer } from "@/lib/auth/session";
-import { publicEnv } from "@/lib/env";
+import { requestAppHost } from "@/lib/http/request-host";
 import { limitAction } from "@/lib/security/action-guard";
 import { stellarConfig } from "@/lib/stellar/config";
 import {
@@ -20,15 +20,13 @@ const UNAVAILABLE = "Wallet linking isn't available right now. Please try again 
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
-const appDomain = () => new URL(publicEnv.NEXT_PUBLIC_APP_URL).host;
-
 /** Step 1: issue a one-time message for the wallet to sign. */
 export async function createWalletChallenge(
   publicKey: string,
 ): Promise<Result<{ challengeId: string; message: string }>> {
   const viewer = await requireViewer("/account");
   const parsed = stellarAccountSchema.safeParse(publicKey);
-  if (!parsed.success) return { ok: false, error: "Freighter returned an invalid address." };
+  if (!parsed.success) return { ok: false, error: "That wallet returned an invalid address." };
 
   const limited = await limitAction("wallet-challenge", { limit: 10, windowMs: 15 * 60_000, subject: viewer.id });
   if (limited) return { ok: false, error: limited };
@@ -60,7 +58,7 @@ export async function createWalletChallenge(
     .eq("user_id", viewer.id)
     .eq("kind", "freighter");
   if ((count ?? 0) >= MAX_FREIGHTER_WALLETS) {
-    return { ok: false, error: `You can link up to ${MAX_FREIGHTER_WALLETS} Freighter wallets. Remove one first.` };
+    return { ok: false, error: `You can link up to ${MAX_FREIGHTER_WALLETS} Stellar wallets. Remove one first.` };
   }
 
   await admin.from("wallet_challenges").delete().eq("user_id", viewer.id).lt("expires_at", new Date().toISOString());
@@ -69,7 +67,13 @@ export async function createWalletChallenge(
   const expiresAt = new Date(Date.now() + WALLET_CHALLENGE_TTL_MS);
   const { data: challenge, error } = await admin
     .from("wallet_challenges")
-    .insert({ user_id: viewer.id, public_key: parsed.data, nonce, expires_at: expiresAt.toISOString() })
+    .insert({
+      user_id: viewer.id,
+      public_key: parsed.data,
+      nonce,
+      expires_at: expiresAt.toISOString(),
+      purpose: "link",
+    })
     .select("id")
     .single();
   if (error) {
@@ -78,7 +82,8 @@ export async function createWalletChallenge(
   }
 
   const message = walletChallengeMessage({
-    domain: appDomain(),
+    purpose: "link",
+      domain: await requestAppHost(),
     publicKey: parsed.data,
     networkPassphrase: stellarConfig.networkPassphrase,
     nonce,
@@ -110,6 +115,7 @@ export async function verifyWalletChallenge(input: { challengeId: string; signat
     .update({ used_at: now })
     .eq("id", parsed.data.challengeId)
     .eq("user_id", viewer.id)
+    .eq("purpose", "link")
     .is("used_at", null)
     .gt("expires_at", now)
     .select("public_key, nonce, expires_at")
@@ -121,7 +127,8 @@ export async function verifyWalletChallenge(input: { challengeId: string; signat
   if (!challenge) return { ok: false, error: "That request expired. Please connect again." };
 
   const message = walletChallengeMessage({
-    domain: appDomain(),
+    purpose: "link",
+      domain: await requestAppHost(),
     publicKey: challenge.public_key,
     networkPassphrase: stellarConfig.networkPassphrase,
     nonce: challenge.nonce,
