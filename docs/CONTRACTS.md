@@ -1,8 +1,8 @@
 # Contract Specifications
 
 > **Status:** implemented, tested (64 unit/integration tests) and deployed to Stellar **testnet** (Phase 2).
-> `event_ticket` **v2** adds escrow, milestone payout, refunds and resale royalties. Redeploy is required
-> before those functions exist on-chain. Source: [`contracts/`](../contracts).
+> `event_ticket` **v2** (escrow, milestone payout, refunds, resale royalties) is live; `version()` returns 2.
+> Source: [`contracts/`](../contracts).
 > Deployment record: [`contracts/deployments/testnet.json`](../contracts/deployments/testnet.json).
 
 All amounts are `i128` in the token's smallest unit (USDC and BY Points both use 7 decimals, so `1 USDC = 10_000_000`).
@@ -14,11 +14,11 @@ support `upgrade(wasm_hash)` / `set_admin(new_admin)` (admin only) and `version(
 
 | Contract | ID |
 |---|---|
-| `event_ticket` | `CDX6WEKM7S5GFB7RP4G4SYCGJE2HCKTIHIB6GZBM5AU2EOCCKWY4QGTW` |
-| `rewards` (BY Points, `BYPTS`) | `CBNV5HCYO42JKRB24ZTJNHYKKZB6E242IKWO2EGUHKIHMMYC6VTV57DQ` |
-| `attendance_badge` | `CBJRSMM7WCS6HZT7PCIMGQW2HNEE4OTHES3AUTSA2F6Q27SASWCH365Z` |
+| `event_ticket` | `CBBZ2U62CAXXZAKROVI7YFELJXILLZDNICL6SL3PUEIX4AEEGYHDSFQD` |
+| `rewards` (BY Points, `BYPTS`) | `CB3XCW3EZQNIKHYYDYYG5WXQA3BJZK7RIHXFX2LIXHV775YE5STG3B3C` |
+| `attendance_badge` | `CCHNNBCK5UKWSYGK4JPPBBWW6YCIRTTDGMD7LTRZXB74JZAHF4C5E3AT` |
 | payment token (mock `USDC` SAC) | `CBM5X6RZPBJJYHGGGYMVCR2FDVEMNGCTP7NX6PFR2UBGB75FEFQJRVNL` |
-| admin account | `GCERZXWWXYN5QJ5OJ37LB5VV5VWDDY6THVC4FAAED2LLYFQS5IYH5BEL` |
+| admin account | `GBWJYRCOAB7DVUQPXDF3QH3MH5FRIGSIIZWJAGWJ6TYGWM4RH6C36DXP` |
 | treasury (platform account) | `GAIXDOU5TZVTNQFWBWY74R3BDGNFCQDVX62UVGUN53XPRT3GDXDL23RG` |
 
 ## Roles
