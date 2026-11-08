@@ -129,6 +129,8 @@ Free-tier limits to expect: a Render free web service spins down after about 15 
 
 ### 2. Deploy the Next.js app
 
+Production (Vercel) env vars and the Supabase migration order: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 Generate secrets once on your machine (`npm run secrets`) and paste them into the host. Do not commit them. Set `NEXT_PUBLIC_*` before the first production build. Changing them later requires a new deploy.
 
 **Render (matches `render.yaml`):**
@@ -159,13 +161,13 @@ Generate secrets once on your machine (`npm run secrets`) and paste them into th
 | `NEXT_PUBLIC_STELLAR_RPC_URL` | No | Default testnet RPC is in `.env.example`. |
 | `NEXT_PUBLIC_STELLAR_HORIZON_URL` | No | Default testnet Horizon is in `.env.example`. |
 | `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | No | Default is the testnet passphrase. |
-| `NEXT_PUBLIC_EVENT_TICKET_CONTRACT_ID` | No | From `npm run contracts:deploy`. |
-| `NEXT_PUBLIC_REWARDS_CONTRACT_ID` | No | From `npm run contracts:deploy`. |
-| `NEXT_PUBLIC_BADGE_CONTRACT_ID` | No | From `npm run contracts:deploy`. |
+| `NEXT_PUBLIC_EVENT_TICKET_CONTRACT_ID` | Yes on host | Testnet v2: `CBBZ2U62CAXXZAKROVI7YFELJXILLZDNICL6SL3PUEIX4AEEGYHDSFQD`. |
+| `NEXT_PUBLIC_REWARDS_CONTRACT_ID` | Yes on host | Testnet v2: `CB3XCW3EZQNIKHYYDYYG5WXQA3BJZK7RIHXFX2LIXHV775YE5STG3B3C`. |
+| `NEXT_PUBLIC_BADGE_CONTRACT_ID` | Yes on host | Testnet v2: `CCHNNBCK5UKWSYGK4JPPBBWW6YCIRTTDGMD7LTRZXB74JZAHF4C5E3AT`. |
 | `NEXT_PUBLIC_STELLAR_ADMIN_PUBLIC_KEY` | No | Public key only. |
 | `NEXT_PUBLIC_USDC_ASSET_CODE` | No | Default `USDC`. |
-| `NEXT_PUBLIC_USDC_ISSUER` | No | `G...` account. |
-| `NEXT_PUBLIC_USDC_CONTRACT_ID` | No | `C...` contract. |
+| `NEXT_PUBLIC_USDC_ISSUER` | Yes on host | Circle testnet `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`; mainnet `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`. |
+| `NEXT_PUBLIC_USDC_CONTRACT_ID` | Yes on host | Circle testnet SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`. |
 | `STELLAR_PLATFORM_SECRET` | For chain writes | `S...` seed. Server only. Generate with `npm run secrets`. |
 | `NEXT_PUBLIC_STELLAR_PLATFORM_PUBLIC_KEY` | For chain writes | Matching `G...` public key. |
 | `CUSTODIAL_KEY_ENCRYPTION_KEY` | For email sign-in wallets | 32-byte base64 key from `npm run secrets`. Server only. |
@@ -174,7 +176,7 @@ Generate secrets once on your machine (`npm run secrets`) and paste them into th
 | `NEXT_PUBLIC_QR_ROTATION_SECONDS` | No | Default `20`. |
 | `NEXT_PUBLIC_ZMW_PER_USDC` | No | Default `26.5`. |
 | `PLATFORM_FEE_BPS` | No | Default `250`. |
-| `RAMP_PROVIDER` | No | `stub` (default) or `sep24`. `PAYMENT_RAMP_PROVIDER` is a deprecated alias. |
+| `RAMP_PROVIDER` | `sep24` on host | Code/tests default `stub`. `PAYMENT_RAMP_PROVIDER` is a deprecated alias. |
 | `ANCHOR_HOME_DOMAIN` | For `sep24` | Host only. Defaults to `testanchor.stellar.org` on testnet. |
 | `KYC_THRESHOLD_AMOUNT` | No | USDC amount below which fan deposits may skip KYC. Default `0`. |
 | `ANCHOR_CALLBACK_SECRET` | For live KYC callbacks | Shared secret or HMAC key. Server only. |

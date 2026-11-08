@@ -7,7 +7,7 @@
 #
 # Options (env vars):
 #   DEPLOYER=by-deployer      Stellar CLI identity used as deployer + contract admin
-#   USDC_MODE=mock|circle     mock: issue our own test USDC (default); circle: Circle's testnet USDC
+#   USDC_MODE=circle|mock     circle: Circle's official testnet USDC (default); mock: local/test issuer only
 #   FEE_BPS=250               platform fee (falls back to PLATFORM_FEE_BPS in .env.local)
 #   ORGANIZER=G...            optionally approve this organizer right away
 #
@@ -20,8 +20,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT/apps/web/.env.local"
 WASM_DIR="$ROOT/contracts/target/wasm32v1-none/release"
 DEPLOYER="${DEPLOYER:-by-deployer}"
-USDC_MODE="${USDC_MODE:-mock}"
+USDC_MODE="${USDC_MODE:-circle}"
 CIRCLE_TESTNET_USDC_ISSUER="GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+CIRCLE_TESTNET_USDC_CONTRACT="CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
 # 10 BY Points per 1 USDC spent; 50 BY Points per check-in (7 decimals).
 PURCHASE_POINTS_PER_UNIT="${PURCHASE_POINTS_PER_UNIT:-100000000}"
 ATTENDANCE_POINTS="${ATTENDANCE_POINTS:-500000000}"
@@ -86,6 +87,9 @@ if ! stellar contract asset deploy --asset "$USDC_ASSET" --source "$DEPLOYER" --
   echo "(asset contract already deployed)"
 fi
 echo "USDC SAC: $USDC_ID"
+if [ "$USDC_MODE" = "circle" ] && [ "$USDC_ID" != "$CIRCLE_TESTNET_USDC_CONTRACT" ]; then
+  echo "warning: expected Circle testnet SAC $CIRCLE_TESTNET_USDC_CONTRACT"
+fi
 
 log "Platform treasury"
 TREASURY="$(env_get NEXT_PUBLIC_STELLAR_PLATFORM_PUBLIC_KEY)"

@@ -114,12 +114,18 @@ can cause file-lock errors. Recommended: move the repo outside OneDrive, or mark
 
 ## Phase 2 — Contracts
 
-### D-015 Payment token = USDC Stellar Asset Contract; testnet uses a mock USDC by default
+### D-015 Payment token = Circle USDC SAC (mock only for local/tests)
 `event_ticket` takes the payment token address in its constructor, so it works with any SEP-41 token.
-On testnet the deploy script issues its own `USDC` classic asset (issuer = a `by-usdc-issuer` CLI identity)
-and deploys its SAC, so we can mint test balances freely. `USDC_MODE=circle` uses Circle's testnet USDC
-instead. XLM settlement = deploy with the native XLM SAC as payment token (a second `event_ticket`
-instance, or a per-event token in a later version).
+Production and hosted testnet use Circle's official USDC:
+
+| Network | Issuer | SAC |
+|---|---|---|
+| testnet | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
+| mainnet | `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` | `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75` |
+
+`npm run contracts:deploy` defaults to `USDC_MODE=circle`. `USDC_MODE=mock` still issues a local
+`by-usdc-issuer` token for unit tests and smoke when you need a mintable asset. That mock issuer
+must not be set on Vercel. XLM settlement = deploy with the native XLM SAC as payment token.
 
 ### D-016 Classic accounts need a USDC trustline
 Because USDC is a classic asset, every **G…** account that receives it (treasury, organizers, artists, buyers,
@@ -274,3 +280,8 @@ Organizer create uses `create_event` (`ends_at`, `royalty_bps` ≤ 15%). The das
 `event_payouts`. Holders `claim_refund` after cancel. Resale listings are off-chain; settlement is
 `transfer_ticket` with the same fee/royalty split as the contract. Fiat resale listings and seller cash-out
 reuse the SEP-12 withdraw gate. `Sep24RampAdapter.parseWebhook` updates `ramp_transactions` alongside polling.
+
+### D-040 Hosted env uses Circle USDC and SEP-24
+Vercel production sets `RAMP_PROVIDER=sep24`, `ANCHOR_HOME_DOMAIN`, `ANCHOR_CALLBACK_SECRET`, Circle
+USDC issuer/SAC, and the v2 contract IDs. Code still defaults `RAMP_PROVIDER` to `stub` so local
+dev and vitest do not call a live anchor. Checklist: `docs/DEPLOY.md`.

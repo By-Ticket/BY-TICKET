@@ -114,18 +114,17 @@ Every variable is documented in [`apps/web/.env.example`](apps/web/.env.example)
 
 ## Deploy
 
-- **Contracts → testnet:** `npm run contracts:deploy`. The script creates and funds a `by-deployer` CLI identity
-  (it becomes the contract admin), builds the WASM, deploys a mock `USDC` asset contract, `rewards`,
-  `attendance_badge` and `event_ticket`, registers `event_ticket` as minter, adds the treasury's USDC
-  trustline, then writes the IDs into `apps/web/.env.local`. It's safe to re-run: each run deploys fresh
-  instances. Options: `USDC_MODE=circle`, `FEE_BPS=250`, `ORGANIZER=G…`.
+- **Contracts → testnet:** `npm run contracts:deploy`. Default settlement is Circle's official
+  testnet USDC. The script deploys `rewards`, `attendance_badge` and `event_ticket` against that SAC,
+  then writes IDs into `apps/web/.env.local`. Safe to re-run (fresh instances). Local/tests only:
+  `USDC_MODE=mock`. Options: `FEE_BPS=250`, `ORGANIZER=G…`.
   Full interface: [docs/CONTRACTS.md](docs/CONTRACTS.md).
-- **Database:** apply `supabase/migrations` in order (Supabase MCP, `supabase db push`, or the SQL editor) and
-  configure Auth as described in [supabase/README.md](supabase/README.md).
-- **Web:** Vercel ([`vercel.json`](vercel.json) — Next.js service `web` at `apps/web`), Render
-  ([`render.yaml`](render.yaml)), or Netlify ([`netlify.toml`](netlify.toml)). Database is hosted
-  Supabase. Exact steps and every env var: [SETUP.md](SETUP.md). `NEXT_PUBLIC_*` values are baked in
-  at build time, so redeploy after changing them.
+- **Database:** apply `supabase/migrations` in the order listed in [docs/DEPLOY.md](docs/DEPLOY.md)
+  (Supabase MCP, `supabase db push`, or the SQL editor) and configure Auth as described in
+  [supabase/README.md](supabase/README.md).
+- **Web:** Vercel ([`vercel.json`](vercel.json) — Next.js service `web` at `apps/web`). Production
+  env vars and the migration checklist: [docs/DEPLOY.md](docs/DEPLOY.md). `NEXT_PUBLIC_*` values are
+  baked in at build time, so redeploy after changing them. Render / Netlify notes: [SETUP.md](SETUP.md).
 
 ## Security
 

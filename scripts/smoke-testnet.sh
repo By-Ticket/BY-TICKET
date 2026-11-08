@@ -40,8 +40,13 @@ SCANNER=$(identity by-smoke-scanner)
 for who in by-smoke-organizer by-smoke-artist by-smoke-buyer; do trust "$who"; done
 echo "organizer $ORG"; echo "artist    $ARTIST"; echo "buyer     $BUYER"; echo "scanner   $SCANNER"
 
+USDC_MODE=$(jq -r .usdc.mode "$DEPLOYMENTS")
 log "Fund buyer with 150 test USDC"
-call by-usdc-issuer "$USDC" mint --to "$BUYER" --amount 1500000000 >/dev/null
+if [ "$USDC_MODE" = "mock" ]; then
+  call by-usdc-issuer "$USDC" mint --to "$BUYER" --amount 1500000000 >/dev/null
+else
+  echo "Circle USDC: mock mint is skipped. Fund $BUYER with testnet USDC before running smoke."
+fi
 
 T0=$(view "$USDC" balance --id "$TREASURY" | unquote)
 O0=$(view "$USDC" balance --id "$ORG" | unquote)
