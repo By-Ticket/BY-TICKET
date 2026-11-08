@@ -92,8 +92,12 @@ export class StubRampAdapter implements PaymentRampAdapter {
     return session;
   }
 
-  async parseWebhook(): Promise<RampSession> {
-    throw new Error("Stub ramp adapter does not receive webhooks");
+  async parseWebhook(_headers: Headers, rawBody: string): Promise<RampSession> {
+    const body = JSON.parse(rawBody) as { id?: string; status?: string; reference?: string };
+    const reference = body.reference ?? body.id ?? "stub";
+    const existing = this.sessions.get(reference);
+    if (existing) return existing;
+    return this.settle(reference, "Stub: webhook received");
   }
 
   private settle(reference: string, instructions: string): RampSession {

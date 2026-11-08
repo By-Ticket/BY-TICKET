@@ -1,11 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { requireRole } from "@/lib/auth/session";
+import { requireViewer } from "@/lib/auth/session";
 import { custodialKeypair } from "@/lib/custodial/keys";
 import { createRampAdapter, rampProvider } from "@/lib/payments/ramp";
 import { refreshKyc } from "@/lib/payments/kyc-flow";
 import type { KycField } from "@/lib/payments/kyc-status";
+import { payoutLinkDenied } from "@/lib/payments/payout-link";
 import { completeSep10ForWallet, ensureAnchorOffers, ensureSep10, insertRampTx, loadRampTx, persistStatus, updateRampTx } from "@/lib/payments/ramp-flow";
 import { isTerminalRampStatus, rampStatusMessage } from "@/lib/payments/status";
 import { limitAction } from "@/lib/security/action-guard";
@@ -13,6 +14,7 @@ import { chainConfig } from "@/lib/stellar/app-chain";
 import { buildPaymentXdr, sendPayment, submitSignedPayment } from "@/lib/stellar/chain";
 import { stellarConfig } from "@/lib/stellar/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/supabase/database.types";
 
 export type CashOutResult =
   | { ok: true; step: "sep10"; rampId?: string; challengeXdr: string; address: string; homeDomain: string }
@@ -26,6 +28,7 @@ export type CashOutResult =
 const beginSchema = z.object({
   walletId: z.uuid(),
   amountUsdc: z.string().regex(/^\d+(\.\d{1,7})?$/),
+  payoutId: z.uuid().optional(),
 });
 
 async function loadOwnWallet(userId: string, walletId: string) {
@@ -36,7 +39,7 @@ async function loadOwnWallet(userId: string, walletId: string) {
 }
 
 export async function beginCashOut(input: z.infer<typeof beginSchema>): Promise<CashOutResult> {
-  const viewer = await requireRole("organizer", "/organizer");
+  const viewer = await requireViewer("/");
   const parsed = beginSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a valid USDC amount." };
   const limited = await limitAction("cashout", { limit: 6, windowMs: 15 * 60_000, subject: viewer.id });
@@ -50,6 +53,18 @@ export async function beginCashOut(input: z.infer<typeof beginSchema>): Promise<
 
     const wallet = await loadOwnWallet(viewer.id, parsed.data.walletId);
     if (!wallet) return { ok: false, error: "Choose one of your wallets." };
+
+    if (parsed.data.payoutId) {
+      const admin = createSupabaseAdminClient();
+      const { data: payout } = await admin.from("event_payouts").select("event_id").eq("id", parsed.data.payoutId).maybeSingle();
+      const { data: event } = payout
+        ? await admin.from("events").select("id, organizer_id").eq("id", payout.event_id).maybeSingle()
+        : { data: null };
+      const { data: org } = await admin.from("organizers").select("id").eq("user_id", viewer.id).maybeSingle();
+      if (payoutLinkDenied({ payout, event, organizerId: org?.id ?? null })) {
+        return { ok: false, error: "That payout is not yours." };
+      }
+    }
 
     const auth = await ensureSep10(wallet);
     if ("step" in auth) {
@@ -89,7 +104,12 @@ export async function beginCashOut(input: z.infer<typeof beginSchema>): Promise<
       status: persistStatus(session.status),
       provider: adapter.provider,
       interactive_url: session.interactiveUrl,
+      extra: (parsed.data.payoutId ? { event_payout_id: parsed.data.payoutId } : {}) as Json,
     });
+    if (parsed.data.payoutId) {
+      const admin = createSupabaseAdminClient();
+      await admin.from("event_payouts").update({ ramp_tx_id: row.id }).eq("id", parsed.data.payoutId);
+    }
     if (adapter.provider === "stub") {
       return { ok: true, step: "done", rampId: row.id, message: "Stub: payout auto-sent." };
     }
@@ -110,20 +130,21 @@ export async function finishSep10CashOut(input: {
   walletId: string;
   signedXdr: string;
   amountUsdc: string;
+  payoutId?: string;
 }): Promise<CashOutResult> {
-  const viewer = await requireRole("organizer", "/organizer");
+  const viewer = await requireViewer("/");
   try {
     const wallet = await loadOwnWallet(viewer.id, input.walletId);
     if (!wallet) return { ok: false, error: "Choose one of your wallets." };
     await completeSep10ForWallet(wallet, input.signedXdr);
-    return beginCashOut({ walletId: input.walletId, amountUsdc: input.amountUsdc });
+    return beginCashOut({ walletId: input.walletId, amountUsdc: input.amountUsdc, payoutId: input.payoutId });
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Could not sign in at the anchor." };
   }
 }
 
 export async function pollCashOut(input: { rampId: string; walletId: string }): Promise<CashOutResult> {
-  const viewer = await requireRole("organizer", "/organizer");
+  const viewer = await requireViewer("/");
   try {
     const row = await loadRampTx(input.rampId, viewer.id);
     if (!row?.anchor_tx_id) return { ok: false, error: "That transfer was not found." };
@@ -192,7 +213,7 @@ export async function submitCashOutPayment(input: {
   signedXdr: string;
   walletId: string;
 }): Promise<CashOutResult> {
-  const viewer = await requireRole("organizer", "/organizer");
+  const viewer = await requireViewer("/");
   try {
     const row = await loadRampTx(input.rampId, viewer.id);
     if (!row) return { ok: false, error: "That transfer was not found." };

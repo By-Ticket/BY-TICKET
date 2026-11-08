@@ -52,7 +52,10 @@ All validate with zod, are rate-limited per IP and per identity, and run as the 
 | `beginCheckout` / `completeCheckout` (`/events/[id]`) | signed in | wallet, method `wallet` \| `mobile_money` \| `local_currency` | local currency is SEP-24; JWT stays in an httpOnly cookie; SEP-12 gates the deposit |
 | `finishSep10Checkout` / `pollLocalCurrencyCheckout` | signed in | signed challenge or ramp id | polls the anchor until deposit completes, then mints |
 | `checkKyc` / `finishSep10Kyc` / `submitKyc` | signed in | wallet + field values / files | files go to the anchor only; status is stored in `kyc_customers` |
-| `beginCashOut` / `pollCashOut` / `submitCashOutPayment` (`/organizer`) | organizer | amount + wallet | SEP-24 withdraw after on-chain `release_payout`; blocked until KYC is ACCEPTED |
+| `beginCashOut` / `pollCashOut` / `submitCashOutPayment` (`/organizer`) | signed-in | amount + wallet, optional `payoutId` | SEP-24 withdraw after `release_payout` or resale proceeds; blocked until KYC is ACCEPTED |
+| `beginCreateEvent` / `finishCreateEvent` / `beginEventAction` (`/organizer`) | organizer | event fields + wallet | on-chain `create_event` / complete / cancel / release / milestone |
+| `beginClaimRefund` / `beginListTicket` / `beginApproveSale` (`/tickets`) | ticket owner | wallet + price | `claim_refund` or list/`transfer_ticket`; KYC if fiat payout |
+| `beginBuyListing` / `finishBuyListing` (`/events/[id]`) | signed in | listing + wallet | shows fee/royalty/seller split, then `transfer_ticket` |
 
 ### Database RPCs (`supabase.rpc(name, args)`)
 

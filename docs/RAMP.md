@@ -63,8 +63,10 @@ matching asset or a local test anchor is used.
    current status.
 5. After a successful GET, the app registers `PUT /customer/callback` pointing at
    `NEXT_PUBLIC_APP_URL/api/ramp/callbacks` when the anchor supports it. The same route also accepts
-   transaction status updates.
-6. `RAMP_PROVIDER=stub` writes `accepted` and skips the live anchor, so local checkout and tests
+   transaction status updates via `Sep24RampAdapter.parseWebhook` (polling still runs).
+6. **Resale proceeds:** listing with “cash out in local currency”, and later withdrawing those USDC,
+   uses the same withdraw KYC gate as organizer cash-out.
+7. `RAMP_PROVIDER=stub` writes `accepted` and skips the live anchor, so local checkout and tests
    still work.
 
 ## Database
@@ -76,5 +78,8 @@ signed-in user select only their own rows; writes stay on the service role.
 `kyc_customers` (migration `20261108153000_kyc_customers.sql`): one row per user (`user_id` PK),
 `status`, `anchor_customer_id`, `fields_needed` (field names/types only), `message`. No document
 bytes. RLS: `select` own row; writes via the service role.
+
+`event_payouts` and `ticket_listings` (migration `20261108200000_event_payouts_listings.sql`): payout rows
+link `ramp_tx_id` after cash-out; listings are public while `listed`. Writes via the service role.
 
 Apply with `npx supabase db push` against the linked project (or the SQL editor).

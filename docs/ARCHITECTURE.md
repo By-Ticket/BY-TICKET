@@ -141,8 +141,10 @@ erDiagram
   ticket_tiers ||--o{ orders : "for"
   orders ||--o{ tickets : "mints (chain mirror)"
   tickets ||--o{ ticket_transfers : "chain mirror"
+  tickets ||--o{ ticket_listings : resale
   tickets ||--o{ ticket_credentials : "QR device keys"
   tickets ||--o{ checkins : "door scans"
+  events ||--o{ event_payouts : "release_payout"
   profiles ||--o{ points_ledger : "chain mirror"
   events ||--o{ badges : "chain mirror"
   perks ||--o{ redemptions : "chain mirror"
@@ -155,6 +157,7 @@ erDiagram
     int capacity
     int max_transfers
     numeric resale_cap_units
+    int royalty_bps
     jsonb splits
     event_status status
     bigint chain_event_id UK
@@ -178,7 +181,9 @@ erDiagram
 ```
 
 Also: `platform_settings` (fee, FX rate), `audit_log`, `chain_cursors` (indexer position per contract),
-`idempotency_keys`, `wallet_challenges` (Freighter ownership proofs).
+`idempotency_keys`, `wallet_challenges` (Freighter ownership proofs), `event_payouts` (on-chain
+`release_payout` linked to SEP-24 cash-out), `ticket_listings` (off-chain resale, settled with
+`transfer_ticket`).
 
 ## Code layout
 

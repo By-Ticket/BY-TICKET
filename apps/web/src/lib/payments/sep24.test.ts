@@ -1,6 +1,6 @@
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { Sep24RampAdapter, anchorOffersAsset, assetEnabled, type Sep24Info } from "./sep24";
+import { Sep24RampAdapter, anchorOffersAsset, assetEnabled, parseSep24Webhook, type Sep24Info } from "./sep24";
 import { mapSep24Status } from "./status";
 import type { AnchorToml } from "./toml";
 
@@ -78,5 +78,16 @@ describe("SEP-24 adapter (mocked fetch)", () => {
     const adapter = new Sep24RampAdapter(toml, "jwt", fetchImpl);
     const session = await adapter.getStatus("tx_1");
     expect(session.status).toBe("settled");
+  });
+
+  it("parses Anchor Platform transaction callbacks", async () => {
+    const body = JSON.stringify({
+      transaction: { id: "tx_cb", kind: "withdraw", status: "completed", amount_in: "12.5" },
+    });
+    const parsed = parseSep24Webhook(body);
+    expect(parsed.providerReference).toBe("tx_cb");
+    expect(parsed.status).toBe("settled");
+    const adapter = new Sep24RampAdapter(toml, "jwt", vi.fn() as unknown as typeof fetch);
+    await expect(adapter.parseWebhook(new Headers(), body)).resolves.toMatchObject({ status: "settled", providerReference: "tx_cb" });
   });
 });

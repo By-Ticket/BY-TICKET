@@ -264,6 +264,13 @@ Primary sales still pay the platform fee to the treasury immediately. The organi
 the `event_ticket` contract per event until `complete_event` (organizer or admin, after `ends_at`) plus
 `release_payout`. An optional `set_payout_milestone` can release a percentage after a minimum check-in count
 while the event is still Live. `cancel_event` blocks payouts; holders `claim_refund` the escrowed net (not
-the fee). `version()` is 2. The web UI is unchanged; only Stellar bindings/types were updated. Testnet was
+the fee). `version()` is 2. Testnet was
 redeployed on 2026-11-08 with a new admin identity (original `by-deployer` was not on this machine); mock
 USDC was reused so existing trustlines still work.
+
+### D-039 Web app wires v2 escrow, refunds, resale and SEP-24 callbacks
+Organizer create uses `create_event` (`ends_at`, `royalty_bps` ≤ 15%). The dashboard calls `complete_event`,
+`release_payout`, `set_payout_milestone` and `cancel_event`, then offers SEP-24 cash-out linked to
+`event_payouts`. Holders `claim_refund` after cancel. Resale listings are off-chain; settlement is
+`transfer_ticket` with the same fee/royalty split as the contract. Fiat resale listings and seller cash-out
+reuse the SEP-12 withdraw gate. `Sep24RampAdapter.parseWebhook` updates `ramp_transactions` alongside polling.

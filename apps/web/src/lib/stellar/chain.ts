@@ -34,13 +34,18 @@ export interface OnChainEvent {
   organizer: string;
   capacity: number;
   sold: number;
+  checkedIn: number;
   maxTransfers: number;
   resaleCap: bigint;
   salesOpen: boolean;
   feeBps: number;
-  royaltyBps?: number;
-  endsAt?: bigint;
+  royaltyBps: number;
+  endsAt: bigint;
   status?: OnChainEventStatus;
+  payoutReleased: boolean;
+  partialReleased: boolean;
+  minCheckinsPartial: number;
+  partialReleaseBps: number;
   metadataHash: string;
   splits: { recipient: string; bps: number }[];
   tiers: OnChainTier[];
@@ -60,18 +65,47 @@ interface UsdcContract {
   }>;
 }
 
+type SignedCall = ContractCall<unknown> & {
+  toXdr: () => string;
+  signAndSend: () => Promise<{ result: unknown; sendTransactionResponse?: { hash?: string } }>;
+};
+
 interface TicketContract {
   get_event: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
   get_ticket: (args: { ticket_id: bigint }) => Promise<ContractCall<unknown>>;
   escrow_balance: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
   event_status: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
+  is_organizer: (args: { organizer: string }) => Promise<ContractCall<unknown>>;
   mint_ticket: (
     args: { payer: string; owner: string; event_id: bigint; tier: number },
     opts?: { timeoutInSeconds?: number },
-  ) => Promise<ContractCall<unknown> & {
-    toXdr: () => string;
-    signAndSend: () => Promise<{ result: unknown; sendTransactionResponse?: { hash?: string } }>;
-  }>;
+  ) => Promise<SignedCall>;
+  create_event: (
+    args: {
+      organizer: string;
+      capacity: number;
+      price: bigint;
+      max_transfers: number;
+      resale_cap: bigint;
+      splits: { recipient: string; bps: number }[];
+      metadata_hash: Buffer | Uint8Array;
+      ends_at: bigint;
+      royalty_bps: number;
+    },
+    opts?: { timeoutInSeconds?: number },
+  ) => Promise<SignedCall>;
+  complete_event: (args: { caller: string; event_id: bigint }, opts?: { timeoutInSeconds?: number }) => Promise<SignedCall>;
+  cancel_event: (args: { caller: string; event_id: bigint }, opts?: { timeoutInSeconds?: number }) => Promise<SignedCall>;
+  release_payout: (args: { caller: string; event_id: bigint }, opts?: { timeoutInSeconds?: number }) => Promise<SignedCall>;
+  set_payout_milestone: (
+    args: { caller: string; event_id: bigint; min_checkins: number; partial_release_bps: number },
+    opts?: { timeoutInSeconds?: number },
+  ) => Promise<SignedCall>;
+  claim_refund: (args: { owner: string; ticket_id: bigint }, opts?: { timeoutInSeconds?: number }) => Promise<SignedCall>;
+  transfer_ticket: (
+    args: { ticket_id: bigint; from: string; to: string; price: bigint },
+    opts?: { timeoutInSeconds?: number },
+  ) => Promise<SignedCall>;
 }
 
 const ticketSpecs = new Map<string, Promise<contract.Spec>>();
@@ -179,6 +213,7 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
     organizer: string;
     capacity: number;
     sold: number;
+    checked_in?: number;
     max_transfers: number;
     resale_cap: bigint;
     sales_open: boolean;
@@ -186,6 +221,10 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
     royalty_bps?: number;
     ends_at?: bigint | number;
     status?: unknown;
+    payout_released?: boolean;
+    partial_released?: boolean;
+    min_checkins_partial?: number;
+    partial_release_bps?: number;
     metadata_hash: unknown;
     splits: { recipient: string; bps: number }[];
     tiers: { price: bigint; capacity: number; sold: number }[];
@@ -194,13 +233,18 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
     organizer: info.organizer,
     capacity: info.capacity,
     sold: info.sold,
+    checkedIn: Number(info.checked_in ?? 0),
     maxTransfers: info.max_transfers,
     resaleCap: BigInt(info.resale_cap),
     salesOpen: info.sales_open,
     feeBps: info.fee_bps,
-    royaltyBps: info.royalty_bps,
-    endsAt: info.ends_at === undefined ? undefined : BigInt(info.ends_at),
+    royaltyBps: Number(info.royalty_bps ?? 0),
+    endsAt: BigInt(info.ends_at ?? 0),
     status: parseEventStatus(info.status),
+    payoutReleased: Boolean(info.payout_released),
+    partialReleased: Boolean(info.partial_released),
+    minCheckinsPartial: Number(info.min_checkins_partial ?? 0),
+    partialReleaseBps: Number(info.partial_release_bps ?? 0),
     metadataHash: bytesToHex(info.metadata_hash),
     splits: info.splits.map((split) => ({ recipient: split.recipient, bps: split.bps })),
     tiers: info.tiers.map((tier) => ({
@@ -242,9 +286,18 @@ export async function readOnChainTicket(cfg: ChainConfig, ticketId: bigint) {
     event_id: bigint;
     tier: number;
     owner: string;
+    transfers?: number;
+    checked_in?: boolean;
     paid?: bigint;
     refunded?: boolean;
   }>(result.result);
+}
+
+export async function readIsOrganizer(cfg: ChainConfig, organizer: string): Promise<boolean> {
+  const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
+  const client = clientFor<TicketContract>(spec, cfg, cfg.ticketContractId);
+  const result = await client.is_organizer({ organizer });
+  return Boolean(unwrapResult(result.result));
 }
 
 /** Create the account (if needed) and add the USDC trustline. Each transaction has one signer. */
@@ -393,8 +446,221 @@ async function waitForTransaction(server: rpc.Server, hash: string) {
   for (let attempt = 0; attempt < 20; attempt++) {
     const found = await server.getTransaction(hash);
     if (found.status === rpc.Api.GetTransactionStatus.SUCCESS) return found;
-    if (found.status === rpc.Api.GetTransactionStatus.FAILED) throw new Error("The purchase failed on the network.");
+    if (found.status === rpc.Api.GetTransactionStatus.FAILED) throw new Error("The transaction failed on the network.");
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
-  throw new Error("The purchase is still pending. Check again in a moment.");
+  throw new Error("The transaction is still pending. Check again in a moment.");
+}
+
+async function ticketClient(cfg: ChainConfig, publicKey?: string, signer?: Keypair): Promise<TicketContract> {
+  const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
+  return clientFor<TicketContract>(spec, cfg, cfg.ticketContractId, publicKey, signer);
+}
+
+export function signXdr(cfg: ChainConfig, xdr: string, signer: Keypair): string {
+  const tx = TransactionBuilder.fromXDR(xdr, cfg.networkPassphrase) as Transaction;
+  tx.sign(signer);
+  return tx.toXDR();
+}
+
+export async function submitSignedInvoke(
+  cfg: ChainConfig,
+  signedXdr: string,
+  expectedSource: string,
+  method: string,
+): Promise<{ hash: string; native: unknown }> {
+  const tx = TransactionBuilder.fromXDR(signedXdr, cfg.networkPassphrase) as Transaction;
+  if (tx.source !== expectedSource) throw new Error("That transaction was signed by a different account.");
+  const op = tx.operations[0];
+  if (!op || op.type !== "invokeHostFunction") throw new Error("That transaction is not a contract call.");
+  const server = rpcServer(cfg);
+  const sent = await server.sendTransaction(tx);
+  if (sent.status === "ERROR") throw new Error("The network rejected the transaction.");
+  const hash = sent.hash;
+  const done = await waitForTransaction(server, hash);
+  const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
+  const native = done.returnValue ? spec.funcResToNative(method, done.returnValue) : undefined;
+  return { hash, native: native === undefined ? undefined : unwrapResult(native) };
+}
+
+export async function buildCreateEventXdr(
+  cfg: ChainConfig,
+  source: string,
+  args: {
+    organizer: string;
+    capacity: number;
+    price: bigint;
+    maxTransfers: number;
+    resaleCap: bigint;
+    splits: { recipient: string; bps: number }[];
+    metadataHash: Uint8Array;
+    endsAt: bigint;
+    royaltyBps: number;
+  },
+): Promise<string> {
+  const client = await ticketClient(cfg, source);
+  const tx = await client.create_event(
+    {
+      organizer: args.organizer,
+      capacity: args.capacity,
+      price: args.price,
+      max_transfers: args.maxTransfers,
+      resale_cap: args.resaleCap,
+      splits: args.splits,
+      metadata_hash: Buffer.from(args.metadataHash),
+      ends_at: args.endsAt,
+      royalty_bps: args.royaltyBps,
+    },
+    { timeoutInSeconds: 180 },
+  );
+  return tx.toXdr();
+}
+
+export async function sendCreateEvent(
+  cfg: ChainConfig,
+  signer: Keypair,
+  args: Parameters<typeof buildCreateEventXdr>[2],
+): Promise<{ hash: string; eventId: bigint }> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const tx = await client.create_event(
+    {
+      organizer: args.organizer,
+      capacity: args.capacity,
+      price: args.price,
+      max_transfers: args.maxTransfers,
+      resale_cap: args.resaleCap,
+      splits: args.splits,
+      metadata_hash: Buffer.from(args.metadataHash),
+      ends_at: args.endsAt,
+      royalty_bps: args.royaltyBps,
+    },
+    { timeoutInSeconds: 180 },
+  );
+  const sent = await tx.signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return { hash, eventId: BigInt(unwrapResult<bigint | number>(sent.result)) };
+}
+
+export async function buildCompleteEventXdr(cfg: ChainConfig, caller: string, eventId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, caller);
+  return (await client.complete_event({ caller, event_id: eventId }, { timeoutInSeconds: 180 })).toXdr();
+}
+
+export async function sendCompleteEvent(cfg: ChainConfig, signer: Keypair, eventId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (await client.complete_event({ caller: signer.publicKey(), event_id: eventId }, { timeoutInSeconds: 180 })).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return hash;
+}
+
+export async function buildCancelEventXdr(cfg: ChainConfig, caller: string, eventId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, caller);
+  return (await client.cancel_event({ caller, event_id: eventId }, { timeoutInSeconds: 180 })).toXdr();
+}
+
+export async function sendCancelEvent(cfg: ChainConfig, signer: Keypair, eventId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (await client.cancel_event({ caller: signer.publicKey(), event_id: eventId }, { timeoutInSeconds: 180 })).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return hash;
+}
+
+export async function buildReleasePayoutXdr(cfg: ChainConfig, caller: string, eventId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, caller);
+  return (await client.release_payout({ caller, event_id: eventId }, { timeoutInSeconds: 180 })).toXdr();
+}
+
+export async function sendReleasePayout(cfg: ChainConfig, signer: Keypair, eventId: bigint): Promise<{ hash: string; amount: bigint }> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (await client.release_payout({ caller: signer.publicKey(), event_id: eventId }, { timeoutInSeconds: 180 })).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return { hash, amount: BigInt(unwrapResult<bigint | number>(sent.result)) };
+}
+
+export async function buildSetMilestoneXdr(
+  cfg: ChainConfig,
+  caller: string,
+  eventId: bigint,
+  minCheckins: number,
+  partialReleaseBps: number,
+): Promise<string> {
+  const client = await ticketClient(cfg, caller);
+  return (
+    await client.set_payout_milestone(
+      { caller, event_id: eventId, min_checkins: minCheckins, partial_release_bps: partialReleaseBps },
+      { timeoutInSeconds: 180 },
+    )
+  ).toXdr();
+}
+
+export async function sendSetMilestone(
+  cfg: ChainConfig,
+  signer: Keypair,
+  eventId: bigint,
+  minCheckins: number,
+  partialReleaseBps: number,
+): Promise<string> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (
+    await client.set_payout_milestone(
+      {
+        caller: signer.publicKey(),
+        event_id: eventId,
+        min_checkins: minCheckins,
+        partial_release_bps: partialReleaseBps,
+      },
+      { timeoutInSeconds: 180 },
+    )
+  ).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return hash;
+}
+
+export async function buildClaimRefundXdr(cfg: ChainConfig, owner: string, ticketId: bigint): Promise<string> {
+  const client = await ticketClient(cfg, owner);
+  return (await client.claim_refund({ owner, ticket_id: ticketId }, { timeoutInSeconds: 180 })).toXdr();
+}
+
+export async function sendClaimRefund(cfg: ChainConfig, signer: Keypair, ticketId: bigint): Promise<{ hash: string; amount: bigint }> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (await client.claim_refund({ owner: signer.publicKey(), ticket_id: ticketId }, { timeoutInSeconds: 180 })).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return { hash, amount: BigInt(unwrapResult<bigint | number>(sent.result)) };
+}
+
+export async function buildTransferTicketXdr(
+  cfg: ChainConfig,
+  source: string,
+  args: { ticketId: bigint; from: string; to: string; price: bigint },
+): Promise<string> {
+  const client = await ticketClient(cfg, source);
+  return (
+    await client.transfer_ticket(
+      { ticket_id: args.ticketId, from: args.from, to: args.to, price: args.price },
+      { timeoutInSeconds: 180 },
+    )
+  ).toXdr();
+}
+
+export async function sendTransferTicket(
+  cfg: ChainConfig,
+  signer: Keypair,
+  args: { ticketId: bigint; from: string; to: string; price: bigint },
+): Promise<string> {
+  const client = await ticketClient(cfg, signer.publicKey(), signer);
+  const sent = await (
+    await client.transfer_ticket(
+      { ticket_id: args.ticketId, from: args.from, to: args.to, price: args.price },
+      { timeoutInSeconds: 180 },
+    )
+  ).signAndSend();
+  const hash = sent.sendTransactionResponse?.hash;
+  if (!hash) throw new Error("The network did not return a transaction hash.");
+  return hash;
 }

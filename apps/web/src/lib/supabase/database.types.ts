@@ -296,6 +296,7 @@ export type Database = {
           metadata_hash: string | null
           organizer_id: string
           resale_cap_units: number
+          royalty_bps: number
           sales_open: boolean
           search: unknown
           slug: string
@@ -331,6 +332,7 @@ export type Database = {
           metadata_hash?: string | null
           organizer_id: string
           resale_cap_units?: number
+          royalty_bps?: number
           sales_open?: boolean
           search?: unknown
           slug: string
@@ -366,6 +368,7 @@ export type Database = {
           metadata_hash?: string | null
           organizer_id?: string
           resale_cap_units?: number
+          royalty_bps?: number
           sales_open?: boolean
           search?: unknown
           slug?: string
@@ -386,6 +389,51 @@ export type Database = {
             columns: ["organizer_id"]
             isOneToOne: false
             referencedRelation: "organizers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_payouts: {
+        Row: {
+          amount_units: number
+          created_at: string
+          event_id: string
+          id: string
+          partial: boolean
+          ramp_tx_id: string | null
+          tx_hash: string
+        }
+        Insert: {
+          amount_units: number
+          created_at?: string
+          event_id: string
+          id?: string
+          partial?: boolean
+          ramp_tx_id?: string | null
+          tx_hash: string
+        }
+        Update: {
+          amount_units?: number
+          created_at?: string
+          event_id?: string
+          id?: string
+          partial?: boolean
+          ramp_tx_id?: string | null
+          tx_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_payouts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_payouts_ramp_tx_id_fkey"
+            columns: ["ramp_tx_id"]
+            isOneToOne: false
+            referencedRelation: "ramp_transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -1050,6 +1098,65 @@ export type Database = {
           },
         ]
       }
+      ticket_listings: {
+        Row: {
+          buyer_public_key: string | null
+          buyer_user_id: string | null
+          created_at: string
+          fiat_payout: boolean
+          id: string
+          price_units: number
+          seller_public_key: string
+          seller_signed_xdr: string | null
+          seller_user_id: string
+          seller_wallet_id: string
+          status: Database["public"]["Enums"]["listing_status"]
+          ticket_id: string
+          unsigned_xdr: string | null
+          updated_at: string
+        }
+        Insert: {
+          buyer_public_key?: string | null
+          buyer_user_id?: string | null
+          created_at?: string
+          fiat_payout?: boolean
+          id?: string
+          price_units: number
+          seller_public_key: string
+          seller_signed_xdr?: string | null
+          seller_user_id: string
+          seller_wallet_id: string
+          status?: Database["public"]["Enums"]["listing_status"]
+          ticket_id: string
+          unsigned_xdr?: string | null
+          updated_at?: string
+        }
+        Update: {
+          buyer_public_key?: string | null
+          buyer_user_id?: string | null
+          created_at?: string
+          fiat_payout?: boolean
+          id?: string
+          price_units?: number
+          seller_public_key?: string
+          seller_signed_xdr?: string | null
+          seller_user_id?: string
+          seller_wallet_id?: string
+          status?: Database["public"]["Enums"]["listing_status"]
+          ticket_id?: string
+          unsigned_xdr?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_listings_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_transfers: {
         Row: {
           created_at: string
@@ -1411,6 +1518,7 @@ export type Database = {
       checkin_result: "accepted" | "duplicate" | "invalid" | "not_scanner"
       event_status: "draft" | "published" | "cancelled" | "completed"
       kyc_status: "accepted" | "processing" | "needs_info" | "rejected"
+      listing_status: "listed" | "reserved" | "sold" | "cancelled"
       order_status:
         | "pending"
         | "submitted"
@@ -1564,6 +1672,7 @@ export const Constants = {
       checkin_result: ["accepted", "duplicate", "invalid", "not_scanner"],
       event_status: ["draft", "published", "cancelled", "completed"],
       kyc_status: ["accepted", "processing", "needs_info", "rejected"],
+      listing_status: ["listed", "reserved", "sold", "cancelled"],
       order_status: [
         "pending",
         "submitted",
