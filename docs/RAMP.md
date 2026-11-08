@@ -43,9 +43,10 @@ The app fetches `https://<ANCHOR_HOME_DOMAIN>/.well-known/stellar.toml` and read
    → `/transactions/withdraw/interactive` → send the asset payment to the anchor account with the
    required memo → poll until complete.
 
-If `GET /info` does not list the ticket asset (`NEXT_PUBLIC_USDC_ASSET_CODE`), the UI explains that
-this anchor cannot take that asset. SDF's test anchor lists Circle testnet USDC, not BY Tickets' mock
-USDC, so that message is expected until a matching asset or a local test anchor is used.
+If `GET /info` does not list the ticket asset code **and issuer** (`NEXT_PUBLIC_USDC_ASSET_CODE` /
+`NEXT_PUBLIC_USDC_ISSUER`), the UI explains that this anchor cannot take that asset. SDF's test
+anchor lists Circle testnet USDC, not BY Tickets' mock USDC, so that message is expected until a
+matching asset or a local test anchor is used.
 
 ## Database
 

@@ -43,6 +43,20 @@ export function assetEnabled(info: Sep24Info, kind: "deposit" | "withdraw", asse
   return Boolean(entry?.enabled);
 }
 
+/** /info is keyed by code; stellar.toml lists issuers. Both must match the ticket asset. */
+export function anchorOffersAsset(
+  info: Sep24Info,
+  toml: AnchorToml,
+  kind: "deposit" | "withdraw",
+  asset: { code: string; issuer?: string },
+): boolean {
+  if (!assetEnabled(info, kind, asset.code)) return false;
+  if (!asset.issuer) return true;
+  const listed = toml.currencies.filter((currency) => currency.code === asset.code);
+  if (listed.length === 0) return true;
+  return listed.some((currency) => currency.issuer === asset.issuer);
+}
+
 export async function fetchSep24Info(
   toml: AnchorToml,
   jwt?: string,
@@ -58,7 +72,7 @@ export async function startInteractive(
   toml: AnchorToml,
   jwt: string,
   kind: "deposit" | "withdraw",
-  params: { assetCode: string; account: string; amount?: string; lang?: string },
+  params: { assetCode: string; assetIssuer?: string; account: string; amount?: string; lang?: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<InteractiveStart> {
   const body = new URLSearchParams({
@@ -67,6 +81,7 @@ export async function startInteractive(
     lang: params.lang ?? "en",
   });
   if (params.amount) body.set("amount", params.amount);
+  if (params.assetIssuer) body.set("asset_issuer", params.assetIssuer);
   const response = await fetchImpl(`${toml.transferServerSep24}/transactions/${kind}/interactive`, {
     method: "POST",
     headers: authHeaders(jwt),
@@ -124,24 +139,25 @@ export class Sep24RampAdapter implements PaymentRampAdapter {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async assertAsset(kind: "deposit" | "withdraw", assetCode: string): Promise<void> {
+  async assertAsset(kind: "deposit" | "withdraw", asset: { code: string; issuer?: string }): Promise<void> {
     const info = await fetchSep24Info(this.toml, this.jwt, this.fetchImpl);
-    if (!assetEnabled(info, kind, assetCode)) {
-      throw new AssetNotOfferedError(assetCode, kind);
+    if (!anchorOffersAsset(info, this.toml, kind, asset)) {
+      throw new AssetNotOfferedError(asset.code, kind);
     }
   }
 
   async startOnRamp(req: OnRampRequest): Promise<RampSession> {
-    await this.assertAsset("deposit", req.assetCode ?? "USDC");
-    const amount = req.amountNgwee > 0n ? undefined : req.amountUsdc;
+    const assetCode = req.assetCode ?? "USDC";
+    await this.assertAsset("deposit", { code: assetCode, issuer: req.assetIssuer });
     const started = await startInteractive(
       this.toml,
       this.jwt,
       "deposit",
       {
-        assetCode: req.assetCode ?? "USDC",
+        assetCode,
+        assetIssuer: req.assetIssuer,
         account: req.destination,
-        amount,
+        amount: req.amountUsdc,
       },
       this.fetchImpl,
     );
@@ -149,13 +165,15 @@ export class Sep24RampAdapter implements PaymentRampAdapter {
   }
 
   async startOffRamp(req: OffRampRequest): Promise<RampSession> {
-    await this.assertAsset("withdraw", req.assetCode ?? "USDC");
+    const assetCode = req.assetCode ?? "USDC";
+    await this.assertAsset("withdraw", { code: assetCode, issuer: req.assetIssuer });
     const started = await startInteractive(
       this.toml,
       this.jwt,
       "withdraw",
       {
-        assetCode: req.assetCode ?? "USDC",
+        assetCode,
+        assetIssuer: req.assetIssuer,
         account: req.sourceAccount ?? req.phone,
         amount: req.amountUsdc,
       },

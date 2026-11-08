@@ -58,6 +58,7 @@ export async function beginCashOut(input: z.infer<typeof beginSchema>): Promise<
       amountUsdcUnits: 0n,
       amountUsdc: parsed.data.amountUsdc,
       assetCode: stellarConfig.usdc.code,
+      assetIssuer: stellarConfig.usdc.issuer,
       sourceAccount: wallet.public_key,
       phone: "",
     });

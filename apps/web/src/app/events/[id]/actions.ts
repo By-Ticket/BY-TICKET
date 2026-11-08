@@ -364,10 +364,22 @@ async function startLocalCurrency(input: {
     amountNgwee: BigInt(Math.round(usdcUnitsToZmw(input.price) * 100)),
     amountUsdc: unitsToAmountString(input.price),
     assetCode: stellarConfig.usdc.code,
+    assetIssuer: stellarConfig.usdc.issuer,
     phone: input.phone,
     destination: input.wallet.public_key,
   });
   if (adapter.provider === "stub" && session.status === "settled") {
+    await insertRampTx({
+      user_id: input.viewerId,
+      kind: "deposit",
+      amount: Number(unitsToAmountString(input.price)),
+      asset_code: stellarConfig.usdc.code,
+      asset_issuer: stellarConfig.usdc.issuer,
+      anchor_tx_id: session.providerReference,
+      status: "settled",
+      provider: "stub",
+      order_id: input.orderId,
+    });
     const admin = createSupabaseAdminClient();
     const { data: order } = await admin.from("orders").select("event_id, tier_id").eq("id", input.orderId).single();
     const { data: event } = await admin.from("events").select("chain_event_id").eq("id", order!.event_id).single();

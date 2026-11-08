@@ -28,6 +28,7 @@ export interface OnRampRequest {
   /** Optional USDC amount string (7 decimals) for SEP-24. */
   amountUsdc?: string;
   assetCode?: string;
+  assetIssuer?: string;
   /** MSISDN in E.164, e.g. +260971234567. */
   phone: string;
   /** Stellar account (G...) or contract (C...) that receives the USDC. */
@@ -41,6 +42,7 @@ export interface OffRampRequest {
   /** Human-readable USDC amount for SEP-24. */
   amountUsdc?: string;
   assetCode?: string;
+  assetIssuer?: string;
   sourceAccount?: string;
   phone: string;
 }

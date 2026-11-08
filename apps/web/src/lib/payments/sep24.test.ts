@@ -1,6 +1,6 @@
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { Sep24RampAdapter, assetEnabled, type Sep24Info } from "./sep24";
+import { Sep24RampAdapter, anchorOffersAsset, assetEnabled, type Sep24Info } from "./sep24";
 import { mapSep24Status } from "./status";
 import type { AnchorToml } from "./toml";
 
@@ -24,11 +24,27 @@ describe("SEP-24 adapter (mocked fetch)", () => {
     expect(assetEnabled(info, "deposit", "ZMW")).toBe(false);
   });
 
+  it("rejects a USDC code whose issuer is not in stellar.toml", () => {
+    const withIssuer: typeof toml = {
+      ...toml,
+      currencies: [{ code: "USDC", issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5" }],
+    };
+    expect(anchorOffersAsset(info, withIssuer, "deposit", { code: "USDC", issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5" })).toBe(true);
+    expect(
+      anchorOffersAsset(info, withIssuer, "deposit", {
+        code: "USDC",
+        issuer: "GB4RGUGQOUHQXDYV4YJGKXYT7WF5HLCMBSSYDCWHFJ5QAOZ2KYYYXLHG",
+      }),
+    ).toBe(false);
+  });
+
   it("starts an interactive deposit and maps incomplete", async () => {
+    let posted = "";
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/info")) return Response.json(info);
       if (url.includes("/deposit/interactive") && init?.method === "POST") {
+        posted = String(init.body);
         return Response.json({ type: "interactive_customer_info_needed", url: "https://anchor.test/widget", id: "tx_1" });
       }
       throw new Error(`unexpected ${url}`);
@@ -38,10 +54,12 @@ describe("SEP-24 adapter (mocked fetch)", () => {
     const session = await adapter.startOnRamp({
       reference: "ref-1",
       amountNgwee: 100n,
+      amountUsdc: "10",
       phone: "+260971234567",
       destination: Keypair.random().publicKey(),
       assetCode: "USDC",
     });
+    expect(posted).toContain("amount=10");
     expect(session.providerReference).toBe("tx_1");
     expect(session.interactiveUrl).toBe("https://anchor.test/widget");
     expect(session.status).toBe("awaiting_customer");

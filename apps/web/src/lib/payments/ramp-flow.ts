@@ -1,5 +1,5 @@
 import "server-only";
-import { AssetNotOfferedError, fetchSep24Info, assetEnabled } from "./sep24";
+import { AssetNotOfferedError, anchorOffersAsset, fetchSep24Info } from "./sep24";
 import { exchangeSep10Token, requestSep10Challenge, signChallengeXdr } from "./sep10";
 import { clearSep10Session, readSep10Session, writeSep10Session } from "./sep10-cookie";
 import { defaultAnchorHomeDomain, rampProvider } from "./ramp";
@@ -23,9 +23,10 @@ export async function ensureAnchorOffers(kind: "deposit" | "withdraw", jwt?: str
   if (!domain) return "Set ANCHOR_HOME_DOMAIN to use local-currency payments.";
   const toml = await fetchStellarToml(domain);
   const info = await fetchSep24Info(toml, jwt);
-  const { code } = await ticketAsset();
-  if (assetEnabled(info, kind, code)) return null;
-  return `This anchor does not offer ${code} for ${kind === "deposit" ? "buying tickets" : "cash-out"}. Try a Stellar wallet, or point ANCHOR_HOME_DOMAIN at an anchor that lists ${code}.`;
+  const asset = await ticketAsset();
+  if (anchorOffersAsset(info, toml, kind, asset)) return null;
+  const label = asset.issuer ? `${asset.code} issued by ${asset.issuer.slice(0, 4)}…${asset.issuer.slice(-4)}` : asset.code;
+  return `This anchor does not offer ${label} for ${kind === "deposit" ? "buying tickets" : "cash-out"}. Try a Stellar wallet, or point ANCHOR_HOME_DOMAIN at an anchor that lists that asset.`;
 }
 
 export async function ensureSep10(
