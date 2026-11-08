@@ -58,7 +58,8 @@ export async function GET(request: Request) {
       platformAccount: Boolean(serverEnv.STELLAR_PLATFORM_SECRET),
       qrSigning: Boolean(serverEnv.QR_CREDENTIAL_SIGNING_KEY && publicEnv.NEXT_PUBLIC_QR_CREDENTIAL_PUBLIC_KEY),
       custodialKeys: Boolean(serverEnv.CUSTODIAL_KEY_ENCRYPTION_KEY),
-      paymentRamp: serverEnv.PAYMENT_RAMP_PROVIDER,
+      paymentRamp: serverEnv.RAMP_PROVIDER,
+      anchorHomeDomain: Boolean(serverEnv.ANCHOR_HOME_DOMAIN) || serverEnv.RAMP_PROVIDER === "sep24",
     },
   });
 }

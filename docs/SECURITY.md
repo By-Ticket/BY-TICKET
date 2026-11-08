@@ -42,7 +42,8 @@ Rules:
 |---|---|
 | Table privileges | Supabase's default `GRANT ALL` to `anon` / `authenticated` is revoked; each table grants back only the needed operations, with **column lists** where part of a row is private (organizer contact details) or chain-controlled (`chain_event_id`, `status`) |
 | Row-level security | enabled on every table; secrets tables (`custodial_keys`, `wallet_challenges`, `idempotency_keys`, `chain_cursors`) have no policies, so only the service role can reach them |
-| Chain mirrors | `orders`, `tickets`, `ticket_transfers`, `checkins`, `points_ledger`, `badges`, `redemptions` have **no write grants** for users. Only server code that verified the Stellar transaction writes them |
+| Chain mirrors | `orders`, `tickets`, `ticket_transfers`, `checkins`, `points_ledger`, `badges`, `redemptions`, `ramp_transactions` have **no write grants** for users. Only server code that verified the Stellar transaction (or the anchor poll) writes them |
+| SEP-10 JWT | stored in the `by_sep10` httpOnly cookie for the current session only. Never written to `localStorage` or a public table |
 | Locked after publish | triggers block user edits to capacity, transfer rules, splits, start time and tier prices once an event is on-chain; changes go through the server, which updates the contract first |
 | Integrity | unique `chain_*_id` and `tx_hash` columns make indexing idempotent; one accepted check-in per ticket; one order per `(user, idempotency_key)`; publish requires an on-chain event id |
 | Helpers | `SECURITY DEFINER` functions with `search_path = ''` in a `private` schema the API doesn't expose, so they can't be called as `/rest/v1/rpc/...`; the policies call them instead of recursing through RLS. Only the intended RPCs (`my_organizer`, `resubmit_organizer`, `admin_*`) stay in `public`, and each checks the caller itself |

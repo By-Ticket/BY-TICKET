@@ -3,6 +3,7 @@ import {
   BASE_FEE,
   Horizon,
   Keypair,
+  Memo,
   Operation,
   TransactionBuilder,
   contract,
@@ -270,6 +271,46 @@ export async function activateAccount(cfg: ChainConfig, platform: Keypair, accou
     hash = (await horizon(cfg).submitTransaction(trust)).hash;
   }
   return hash;
+}
+
+export async function buildPaymentXdr(
+  cfg: ChainConfig,
+  from: string,
+  input: { destination: string; amount: string; memo?: string; memoType?: string },
+): Promise<string> {
+  const source = await horizon(cfg).loadAccount(from);
+  const builder = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: cfg.networkPassphrase }).addOperation(
+    Operation.payment({
+      destination: input.destination,
+      asset: usdcAsset(cfg),
+      amount: input.amount,
+    }),
+  );
+  if (input.memo) {
+    const type = (input.memoType ?? "text").toLowerCase();
+    if (type === "id") builder.addMemo(Memo.id(input.memo));
+    else if (type === "hash") builder.addMemo(Memo.hash(Buffer.from(input.memo, "hex").toString("hex")));
+    else builder.addMemo(Memo.text(input.memo.slice(0, 28)));
+  }
+  return builder.setTimeout(180).build().toXDR();
+}
+
+export async function submitSignedPayment(cfg: ChainConfig, signedXdr: string, from: string): Promise<string> {
+  const tx = TransactionBuilder.fromXDR(signedXdr, cfg.networkPassphrase) as Transaction;
+  if (tx.source !== from) throw new Error("The payout was signed by a different account.");
+  const sent = await horizon(cfg).submitTransaction(tx);
+  return sent.hash;
+}
+
+export async function sendPayment(
+  cfg: ChainConfig,
+  signer: Keypair,
+  input: { destination: string; amount: string; memo?: string; memoType?: string },
+): Promise<string> {
+  const xdr = await buildPaymentXdr(cfg, signer.publicKey(), input);
+  const tx = TransactionBuilder.fromXDR(xdr, cfg.networkPassphrase) as Transaction;
+  tx.sign(signer);
+  return submitSignedPayment(cfg, tx.toXDR(), signer.publicKey());
 }
 
 export async function buildTrustlineXdr(cfg: ChainConfig, publicKey: string): Promise<string> {

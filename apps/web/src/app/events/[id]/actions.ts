@@ -5,9 +5,13 @@ import { z } from "zod";
 import { requireViewer } from "@/lib/auth/session";
 import { custodialKeypair } from "@/lib/custodial/keys";
 import { usdcUnitsToZmw } from "@/lib/payments/pricing";
-import { createRampAdapter } from "@/lib/payments/ramp";
+import { unitsToAmountString } from "@/lib/payments/format";
+import { createRampAdapter, rampProvider } from "@/lib/payments/ramp";
+import { completeSep10ForWallet, ensureAnchorOffers, ensureSep10, insertRampTx, loadRampTx, persistStatus, updateRampTx } from "@/lib/payments/ramp-flow";
+import { isTerminalRampStatus, rampStatusMessage } from "@/lib/payments/status";
 import { limitAction } from "@/lib/security/action-guard";
 import { chainConfig, platformKeypair } from "@/lib/stellar/app-chain";
+import { stellarConfig } from "@/lib/stellar/config";
 import {
   accountRecord,
   activateAccount,
@@ -27,6 +31,8 @@ import { serverEnv } from "@/lib/env.server";
 export type CheckoutResult =
   | { ok: true; step: "trustline"; orderId: string; xdr: string; address: string }
   | { ok: true; step: "sign"; orderId: string; xdr: string; address: string }
+  | { ok: true; step: "sep10"; orderId: string; challengeXdr: string; address: string; homeDomain: string }
+  | { ok: true; step: "ramp"; orderId: string; rampId: string; url: string; status: string; message: string }
   | { ok: true; step: "done"; orderId: string; chainTicketId: string }
   | { ok: false; error: string };
 
@@ -34,7 +40,7 @@ const beginSchema = z.object({
   eventId: z.uuid(),
   tierId: z.uuid(),
   walletId: z.uuid(),
-  method: z.enum(["wallet", "mobile_money"]),
+  method: z.enum(["wallet", "mobile_money", "local_currency"]),
   idempotencyKey: z.uuid(),
 });
 
@@ -192,6 +198,15 @@ export async function beginCheckout(input: z.infer<typeof beginSchema>): Promise
     }
 
     const cfg = chainConfig();
+    if (parsed.data.method === "local_currency") {
+      return startLocalCurrency({
+        viewerId: viewer.id,
+        wallet,
+        orderId,
+        price,
+        phone: profile?.phone ?? "",
+      });
+    }
     if (!payerIsPlatform && wallet.kind === "freighter") {
       const account = await accountRecord(cfg, wallet.public_key);
       if (!account) return { ok: false, error: "That Stellar account is not on testnet yet." };
@@ -228,13 +243,13 @@ export async function beginCheckout(input: z.infer<typeof beginSchema>): Promise
       return { ok: true, step: "done", orderId, chainTicketId: minted.ticketId.toString() };
     }
 
-    const ramp = createRampAdapter("stub").startOnRamp({
+    const ramp = await createRampAdapter("stub");
+    const session = await ramp.startOnRamp({
       reference: parsed.data.idempotencyKey,
       amountNgwee: BigInt(Math.round(usdcUnitsToZmw(price) * 100)),
       phone: profile?.phone ?? "",
       destination: platformKeypair().publicKey(),
     });
-    const session = await ramp;
     if (session.status !== "settled") return { ok: false, error: "The mobile-money payment did not settle." };
     await requireUsdc(platformKeypair().publicKey(), price);
     const minted = await sendMintTicket(cfg, platformKeypair(), {
@@ -315,4 +330,206 @@ export async function completeCheckout(input: z.infer<typeof signedSchema>): Pro
   } catch (error) {
     return { ok: false, error: checkoutError(error) };
   }
+}
+
+type CheckoutWallet = { id: string; kind: "custodial" | "freighter"; public_key: string };
+
+async function startLocalCurrency(input: {
+  viewerId: string;
+  wallet: CheckoutWallet;
+  orderId: string;
+  price: bigint;
+  phone: string;
+}): Promise<CheckoutResult> {
+  if (rampProvider() === "sep24") {
+    const missing = await ensureAnchorOffers("deposit");
+    if (missing) return { ok: false, error: missing };
+  }
+
+  const auth = await ensureSep10(input.wallet);
+  if ("step" in auth) {
+    return {
+      ok: true,
+      step: "sep10",
+      orderId: input.orderId,
+      challengeXdr: auth.challengeXdr,
+      address: auth.address,
+      homeDomain: auth.homeDomain,
+    };
+  }
+
+  const adapter = await createRampAdapter(rampProvider(), auth.jwt);
+  const session = await adapter.startOnRamp({
+    reference: input.orderId,
+    amountNgwee: BigInt(Math.round(usdcUnitsToZmw(input.price) * 100)),
+    amountUsdc: unitsToAmountString(input.price),
+    assetCode: stellarConfig.usdc.code,
+    phone: input.phone,
+    destination: input.wallet.public_key,
+  });
+  if (adapter.provider === "stub" && session.status === "settled") {
+    const admin = createSupabaseAdminClient();
+    const { data: order } = await admin.from("orders").select("event_id, tier_id").eq("id", input.orderId).single();
+    const { data: event } = await admin.from("events").select("chain_event_id").eq("id", order!.event_id).single();
+    const { data: tier } = await admin.from("ticket_tiers").select("chain_tier").eq("id", order!.tier_id).single();
+    const cfg = chainConfig();
+    const chainEventId = BigInt(event!.chain_event_id!);
+    await requireUsdc(platformKeypair().publicKey(), input.price);
+    const minted = await sendMintTicket(cfg, platformKeypair(), {
+      payer: platformKeypair().publicKey(),
+      owner: input.wallet.public_key,
+      eventId: chainEventId,
+      tier: tier!.chain_tier!,
+    });
+    await recordPurchase({
+      orderId: input.orderId,
+      hash: minted.hash,
+      ticketId: minted.ticketId,
+      eventDbId: order!.event_id,
+      tierId: order!.tier_id,
+      chainEventId,
+    });
+    return { ok: true, step: "done", orderId: input.orderId, chainTicketId: minted.ticketId.toString() };
+  }
+  const row = await insertRampTx({
+    user_id: input.viewerId,
+    kind: "deposit",
+    amount: Number(unitsToAmountString(input.price)),
+    asset_code: stellarConfig.usdc.code,
+    asset_issuer: stellarConfig.usdc.issuer,
+    anchor_tx_id: session.providerReference,
+    status: persistStatus(session.status),
+    provider: adapter.provider,
+    interactive_url: session.interactiveUrl,
+    order_id: input.orderId,
+  });
+  return {
+    ok: true,
+    step: "ramp",
+    orderId: input.orderId,
+    rampId: row.id,
+    url: session.interactiveUrl ?? "",
+    status: session.status,
+    message: rampStatusMessage(session.status),
+  };
+}
+
+export async function finishSep10Checkout(input: {
+  orderId: string;
+  walletId: string;
+  signedXdr: string;
+}): Promise<CheckoutResult> {
+  const viewer = await requireViewer("/events");
+  const limited = await limitAction("sep10", { limit: 8, windowMs: 15 * 60_000, subject: viewer.id });
+  if (limited) return { ok: false, error: limited };
+  try {
+    const admin = createSupabaseAdminClient();
+    const [{ data: wallet }, { data: order }] = await Promise.all([
+      admin.from("wallets").select("id, user_id, kind, public_key").eq("id", input.walletId).maybeSingle(),
+      admin.from("orders").select("id, user_id, event_id, tier_id, unit_price_units").eq("id", input.orderId).maybeSingle(),
+    ]);
+    if (!wallet || wallet.user_id !== viewer.id || !order || order.user_id !== viewer.id) {
+      return { ok: false, error: "That order was not found." };
+    }
+    await completeSep10ForWallet(wallet, input.signedXdr);
+    const { data: profile } = await admin.from("profiles").select("phone").eq("id", viewer.id).maybeSingle();
+    return startLocalCurrency({
+      viewerId: viewer.id,
+      wallet,
+      orderId: order.id,
+      price: BigInt(order.unit_price_units),
+      phone: profile?.phone ?? "",
+    });
+  } catch (error) {
+    return { ok: false, error: checkoutError(error) };
+  }
+}
+
+export async function pollLocalCurrencyCheckout(input: { rampId: string; walletId: string }): Promise<CheckoutResult> {
+  const viewer = await requireViewer("/events");
+  try {
+    const row = await loadRampTx(input.rampId, viewer.id);
+    if (!row || !row.order_id || !row.anchor_tx_id) return { ok: false, error: "That transfer was not found." };
+    const admin = createSupabaseAdminClient();
+    const { data: wallet } = await admin.from("wallets").select("id, user_id, kind, public_key").eq("id", input.walletId).maybeSingle();
+    if (!wallet || wallet.user_id !== viewer.id) return { ok: false, error: "Choose one of your wallets." };
+    const auth = await ensureSep10(wallet);
+    if ("step" in auth) {
+      return { ok: true, step: "sep10", orderId: row.order_id, challengeXdr: auth.challengeXdr, address: auth.address, homeDomain: auth.homeDomain };
+    }
+    const adapter = await createRampAdapter(rampProvider(), auth.jwt);
+    const session = await adapter.getStatus(row.anchor_tx_id);
+    await updateRampTx(row.id, viewer.id, { status: persistStatus(session.status) });
+    if (session.status === "settled") {
+      const { data: order } = await admin.from("orders").select("unit_price_units").eq("id", row.order_id).single();
+      if (!order) return { ok: false, error: "That order was not found." };
+      return mintFromWalletAfterRamp(row.order_id, wallet, BigInt(order.unit_price_units));
+    }
+    if (isTerminalRampStatus(session.status)) {
+      return { ok: false, error: rampStatusMessage(session.status) };
+    }
+    return {
+      ok: true,
+      step: "ramp",
+      orderId: row.order_id,
+      rampId: row.id,
+      url: row.interactive_url ?? session.interactiveUrl ?? "",
+      status: session.status,
+      message: rampStatusMessage(session.status),
+    };
+  } catch (error) {
+    return { ok: false, error: checkoutError(error) };
+  }
+}
+
+async function mintFromWalletAfterRamp(orderId: string, wallet: CheckoutWallet, price: bigint): Promise<CheckoutResult> {
+  const admin = createSupabaseAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, user_id, event_id, tier_id, status")
+    .eq("id", orderId)
+    .single();
+  if (!order) return { ok: false, error: "That order was not found." };
+  if (order.status === "confirmed") {
+    const { data: ticket } = await admin.from("tickets").select("chain_ticket_id").eq("order_id", order.id).maybeSingle();
+    return { ok: true, step: "done", orderId: order.id, chainTicketId: String(ticket?.chain_ticket_id ?? "") };
+  }
+  const { data: event } = await admin.from("events").select("chain_event_id").eq("id", order.event_id).single();
+  const { data: tier } = await admin.from("ticket_tiers").select("chain_tier").eq("id", order.tier_id).single();
+  if (!event?.chain_event_id || tier?.chain_tier === null || tier?.chain_tier === undefined) {
+    return { ok: false, error: "That ticket is no longer on sale." };
+  }
+  const cfg = chainConfig();
+  const chainEventId = BigInt(event.chain_event_id);
+  await requireUsdc(wallet.public_key, price);
+  if (wallet.kind === "freighter") {
+    return {
+      ok: true,
+      step: "sign",
+      orderId: order.id,
+      address: wallet.public_key,
+      xdr: await buildMintTicketXdr(cfg, wallet.public_key, {
+        payer: wallet.public_key,
+        owner: wallet.public_key,
+        eventId: chainEventId,
+        tier: tier.chain_tier,
+      }),
+    };
+  }
+  const keypair = await custodialKeypair(wallet.id, wallet.public_key);
+  const minted = await sendMintTicket(cfg, keypair, {
+    payer: wallet.public_key,
+    owner: wallet.public_key,
+    eventId: chainEventId,
+    tier: tier.chain_tier,
+  });
+  await recordPurchase({
+    orderId: order.id,
+    hash: minted.hash,
+    ticketId: minted.ticketId,
+    eventDbId: order.event_id,
+    tierId: order.tier_id,
+    chainEventId,
+  });
+  return { ok: true, step: "done", orderId: order.id, chainTicketId: minted.ticketId.toString() };
 }

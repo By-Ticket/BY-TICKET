@@ -24,9 +24,10 @@
 - Legal: terms, refund policy, data protection (Zambia Data Protection Act 2021).
 
 ### Mobile money on/off-ramp
-- Implement `PaymentRampAdapter` for MTN MoMo, Airtel Money, Zamtel Kwacha (directly or via an aggregator).
-- On-ramp: customer pays ZMW via USSD/STK push → anchor/partner credits USDC → ticket minted.
-- Off-ramp: organizer payouts in ZMW via SEP-24/SEP-31 anchors.
+- SEP-24 Stellar Anchor is live (`Sep24RampAdapter`, `RAMP_PROVIDER=sep24`). Remaining: a Zambian
+  production anchor that lists our USDC and the MTN / Airtel / Zamtel rails (kept as provider metadata).
+- On-ramp: customer pays fiat in the anchor widget → USDC lands → ticket minted.
+- Off-ramp: organizer cash-out after `release_payout` via `/transactions/withdraw/interactive`.
 - Reconciliation jobs, webhook signature verification, idempotent settlement.
 
 ### Secondary marketplace

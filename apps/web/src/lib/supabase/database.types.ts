@@ -827,6 +827,81 @@ export type Database = {
           },
         ]
       }
+      ramp_transactions: {
+        Row: {
+          amount: number
+          anchor_tx_id: string | null
+          asset_code: string
+          asset_issuer: string | null
+          created_at: string
+          extra: Json
+          home_domain: string | null
+          id: string
+          interactive_url: string | null
+          kind: Database["public"]["Enums"]["ramp_kind"]
+          memo: string | null
+          order_id: string | null
+          provider: string
+          status: Database["public"]["Enums"]["ramp_tx_status"]
+          updated_at: string
+          user_id: string
+          withdraw_account: string | null
+        }
+        Insert: {
+          amount: number
+          anchor_tx_id?: string | null
+          asset_code: string
+          asset_issuer?: string | null
+          created_at?: string
+          extra?: Json
+          home_domain?: string | null
+          id?: string
+          interactive_url?: string | null
+          kind: Database["public"]["Enums"]["ramp_kind"]
+          memo?: string | null
+          order_id?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["ramp_tx_status"]
+          updated_at?: string
+          user_id: string
+          withdraw_account?: string | null
+        }
+        Update: {
+          amount?: number
+          anchor_tx_id?: string | null
+          asset_code?: string
+          asset_issuer?: string | null
+          created_at?: string
+          extra?: Json
+          home_domain?: string | null
+          id?: string
+          interactive_url?: string | null
+          kind?: Database["public"]["Enums"]["ramp_kind"]
+          memo?: string | null
+          order_id?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["ramp_tx_status"]
+          updated_at?: string
+          user_id?: string
+          withdraw_account?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ramp_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ramp_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_credentials: {
         Row: {
           device_public_key: string
@@ -1297,6 +1372,15 @@ export type Database = {
         | "refunded"
       organizer_status: "pending" | "approved" | "rejected" | "suspended"
       payment_method: "stellar_usdc" | "stellar_xlm" | "mobile_money"
+      ramp_kind: "deposit" | "withdraw"
+      ramp_tx_status:
+        | "pending"
+        | "awaiting_customer"
+        | "settled"
+        | "failed"
+        | "error"
+        | "refunded"
+        | "expired"
       redemption_status: "pending" | "confirmed" | "fulfilled" | "failed"
       ticket_status: "valid" | "checked_in" | "void"
       wallet_kind: "custodial" | "freighter"
@@ -1441,6 +1525,16 @@ export const Constants = {
       ],
       organizer_status: ["pending", "approved", "rejected", "suspended"],
       payment_method: ["stellar_usdc", "stellar_xlm", "mobile_money"],
+      ramp_kind: ["deposit", "withdraw"],
+      ramp_tx_status: [
+        "pending",
+        "awaiting_customer",
+        "settled",
+        "failed",
+        "error",
+        "refunded",
+        "expired",
+      ],
       redemption_status: ["pending", "confirmed", "fulfilled", "failed"],
       ticket_status: ["valid", "checked_in", "void"],
       wallet_kind: ["custodial", "freighter"],
