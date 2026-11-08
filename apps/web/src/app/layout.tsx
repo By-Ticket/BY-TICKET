@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Inter, Syne } from "next/font/google";
 import { SiteHeader } from "@/components/layout/site-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,6 +9,7 @@ import "./globals.css";
 // next/font self-hosts fonts at build time: no runtime requests to Google, and
 // `display: swap` keeps text readable while fonts load on slow networks.
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
+const syne = Syne({ variable: "--font-syne", subsets: ["latin"], display: "swap" });
 const mono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#1a1220",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -33,7 +34,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} ${syne.variable} ${mono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <SiteHeader />
         <main className="flex-1 pb-20 md:pb-0">{children}</main>

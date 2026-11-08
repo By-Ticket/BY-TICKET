@@ -40,7 +40,7 @@ export default async function EventsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <div>
-        <h1 className="font-heading text-3xl font-extrabold">Events</h1>
+        <h1 className="font-heading text-3xl font-bold">Events</h1>
         <p className="text-muted-foreground text-sm">Prices are shown in kwacha and charged in test USDC.</p>
       </div>
       {loadError && <p className="text-destructive text-sm">{loadError}</p>}
@@ -51,9 +51,10 @@ export default async function EventsPage() {
           const price = tiers[0] ? formatPrice(BigInt(tiers[0].price_units)) : null;
           return (
             <Link key={event.id} href={`/events/${event.id}`}>
-              <Card className="hover:bg-muted/30 h-full transition-colors">
+              <Card className="h-full transition-transform hover:-translate-y-0.5">
+                <div className="bg-brand h-1.5" aria-hidden />
                 <CardHeader>
-                  <CardTitle className="font-heading text-xl">{event.title}</CardTitle>
+                  <CardTitle className="font-heading text-xl font-bold">{event.title}</CardTitle>
                   <CardDescription>{event.summary}</CardDescription>
                 </CardHeader>
                 <CardContent className="text-muted-foreground space-y-1 text-sm">

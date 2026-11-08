@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
+import { Logo } from "@/components/brand/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConnectStellarWallet } from "@/components/wallet/connect-stellar";
 import { getViewer } from "@/lib/auth/session";
@@ -23,8 +24,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   return (
     <div className="mx-auto max-w-md px-4 py-8 md:py-16">
       <Card>
+        <div className="bg-brand h-1.5" aria-hidden />
         <CardHeader>
-          <CardTitle className="text-[28px] leading-8 font-semibold">Sign in</CardTitle>
+          <Logo withTagline />
+          <CardTitle className="mt-4 text-[28px] leading-8 font-bold">Sign in</CardTitle>
           <CardDescription>
             Use a Stellar wallet, or we email you a code. Tickets and BY Points stay in your account either way.
           </CardDescription>

@@ -7,13 +7,13 @@ import { customerNav, staffNav } from "./nav-items";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
         <Link href="/" aria-label="BY Tickets home">
           <Logo />
         </Link>
         {stellarConfig.isTestnet && (
-          <Badge variant="outline" className="border-border text-muted-foreground font-medium">
+          <Badge variant="secondary" className="bg-sun/40 text-night border-transparent font-semibold">
             Testnet
           </Badge>
         )}
@@ -22,7 +22,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-md px-3 py-2 transition-colors"
+              className="text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full px-3 py-2 transition-colors"
             >
               {item.label}
             </Link>

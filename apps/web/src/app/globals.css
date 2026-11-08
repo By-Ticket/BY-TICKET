@@ -5,21 +5,22 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Calendar — Luma Light. White canvas, ink text, black primary actions, 1px hairlines,
- * an 8px spacing rhythm, and Inter. Event photography is the only strong color.
+ * Sunset ticket — warm cream canvas, night ink, gold → copper → hibiscus brand.
+ * The ticket mark and hero use the same gradient as /icon.svg.
  */
 @theme inline {
   --color-copper: oklch(0.7 0.18 48);
   --color-sun: oklch(0.86 0.17 88);
   --color-emerald: oklch(0.7 0.17 152);
   --color-hibiscus: oklch(0.64 0.23 8);
-  --color-ink: oklch(0.16 0.02 300);
+  --color-night: oklch(0.22 0.05 320);
+  --color-ink: oklch(0.22 0.05 320);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-syne), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -59,68 +60,69 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #131517;
+  --background: #fff7f0;
+  --foreground: #1a1220;
   --card: #ffffff;
-  --card-foreground: #131517;
+  --card-foreground: #1a1220;
   --popover: #ffffff;
-  --popover-foreground: #131517;
-  --primary: #131517;
+  --popover-foreground: #1a1220;
+  --primary: #e2366b;
   --primary-foreground: #ffffff;
-  --secondary: #f7f7f8;
-  --secondary-foreground: #131517;
-  --muted: #f7f7f8;
-  --muted-foreground: #737577;
-  --accent: #f7f7f8;
-  --accent-foreground: #131517;
+  --secondary: #ffe4c2;
+  --secondary-foreground: #1a1220;
+  --muted: #fff1e4;
+  --muted-foreground: #6b4a58;
+  --accent: #ffc83d;
+  --accent-foreground: #1a1220;
   --destructive: #b42318;
-  --border: #ebebec;
-  --input: #ebebec;
-  --ring: #131517;
-  --chart-1: #131517;
-  --chart-2: #737577;
-  --chart-3: #0a7b35;
-  --chart-4: #ebebec;
-  --chart-5: #f7f7f8;
-  --radius: 0.75rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #131517;
-  --sidebar-primary: #131517;
+  --border: #f3d0bc;
+  --input: #f3d0bc;
+  --ring: #f0782a;
+  --chart-1: #e2366b;
+  --chart-2: #f0782a;
+  --chart-3: #ffc83d;
+  --chart-4: #2bb673;
+  --chart-5: #1a1220;
+  --radius: 0.9rem;
+  --sidebar: #fff7f0;
+  --sidebar-foreground: #1a1220;
+  --sidebar-primary: #e2366b;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f7f7f8;
-  --sidebar-accent-foreground: #131517;
-  --sidebar-border: #ebebec;
-  --sidebar-ring: #131517;
-  --shadow-soft: 0 1px 2px rgb(19 21 23 / 4%), 0 8px 24px rgb(19 21 23 / 6%);
+  --sidebar-accent: #ffe4c2;
+  --sidebar-accent-foreground: #1a1220;
+  --sidebar-border: #f3d0bc;
+  --sidebar-ring: #f0782a;
+  --shadow-soft: 0 1px 2px rgb(26 18 32 / 6%), 0 12px 32px rgb(226 54 107 / 10%);
+  --brand-gradient: linear-gradient(135deg, #ffc83d 0%, #f0782a 48%, #e2366b 100%);
 }
 
 .dark {
-  --background: #ffffff;
-  --foreground: #131517;
-  --card: #ffffff;
-  --card-foreground: #131517;
-  --popover: #ffffff;
-  --popover-foreground: #131517;
-  --primary: #131517;
-  --primary-foreground: #ffffff;
-  --secondary: #f7f7f8;
-  --secondary-foreground: #131517;
-  --muted: #f7f7f8;
-  --muted-foreground: #737577;
-  --accent: #f7f7f8;
-  --accent-foreground: #131517;
-  --destructive: #b42318;
-  --border: #ebebec;
-  --input: #ebebec;
-  --ring: #131517;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #131517;
-  --sidebar-primary: #131517;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f7f7f8;
-  --sidebar-accent-foreground: #131517;
-  --sidebar-border: #ebebec;
-  --sidebar-ring: #131517;
+  --background: #1a1220;
+  --foreground: #fff7f0;
+  --card: #2a1630;
+  --card-foreground: #fff7f0;
+  --popover: #2a1630;
+  --popover-foreground: #fff7f0;
+  --primary: #ffc83d;
+  --primary-foreground: #1a1220;
+  --secondary: #3a2244;
+  --secondary-foreground: #fff7f0;
+  --muted: #2a1630;
+  --muted-foreground: #d7b8c4;
+  --accent: #e2366b;
+  --accent-foreground: #ffffff;
+  --destructive: #ff6b5c;
+  --border: #4a2d52;
+  --input: #4a2d52;
+  --ring: #ffc83d;
+  --sidebar: #1a1220;
+  --sidebar-foreground: #fff7f0;
+  --sidebar-primary: #ffc83d;
+  --sidebar-primary-foreground: #1a1220;
+  --sidebar-accent: #3a2244;
+  --sidebar-accent-foreground: #fff7f0;
+  --sidebar-border: #4a2d52;
+  --sidebar-ring: #ffc83d;
 }
 
 @layer base {
@@ -131,6 +133,10 @@
     @apply bg-background text-foreground;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.011em;
+    background-image:
+      radial-gradient(900px 420px at 0% -10%, rgb(255 200 61 / 0.22), transparent 55%),
+      radial-gradient(700px 380px at 100% 0%, rgb(226 54 107 / 0.16), transparent 50%);
+    background-attachment: fixed;
   }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -149,4 +155,15 @@
 
 @utility pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility bg-brand {
+  background-image: var(--brand-gradient);
+}
+
+@utility text-brand {
+  background-image: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }

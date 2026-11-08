@@ -17,7 +17,7 @@ export default async function MyTicketsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
       <div>
-        <h1 className="font-heading text-3xl font-extrabold">My tickets</h1>
+        <h1 className="font-heading text-3xl font-bold">My tickets</h1>
         <p className="text-muted-foreground text-sm">The door QR arrives in the next step. These tickets are already yours on Stellar.</p>
       </div>
       {(tickets ?? []).length === 0 && (

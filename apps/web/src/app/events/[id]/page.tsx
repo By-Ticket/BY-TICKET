@@ -68,7 +68,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           </Link>
           {organizer?.name ? ` · ${organizer.name}` : ""}
         </p>
-        <h1 className="font-heading text-4xl font-extrabold">{event.title}</h1>
+        <h1 className="font-heading text-4xl font-bold">{event.title}</h1>
         <p className="text-lg">{event.summary}</p>
         <div className="text-muted-foreground space-y-1 text-sm">
           <p className="flex items-center gap-2">
@@ -91,12 +91,14 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </div>
       </article>
 
-      <aside className="bg-card h-fit space-y-4 rounded-2xl border p-5">
+      <aside className="bg-card shadow-soft h-fit space-y-4 overflow-hidden rounded-2xl border p-0">
+        <div className="bg-brand h-1.5" aria-hidden />
+        <div className="space-y-4 p-5">
         <div>
-          <h2 className="font-heading text-xl font-extrabold">{tier.name}</h2>
+          <h2 className="font-heading text-xl font-bold">{tier.name}</h2>
           <p className="text-muted-foreground text-sm">{tier.description}</p>
         </div>
-        <p className="font-heading text-3xl font-extrabold">{price.zmw}</p>
+        <p className="font-heading text-3xl font-bold">{price.zmw}</p>
         <p className="text-muted-foreground text-sm">{price.usdc} on Stellar testnet</p>
         <p className="text-xs">
           {tier.sold} of {tier.capacity} sold
@@ -121,6 +123,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             View the ticket contract
           </a>
         )}
+        </div>
       </aside>
     </div>
   );

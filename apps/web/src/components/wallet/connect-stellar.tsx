@@ -58,7 +58,7 @@ export function ConnectStellarWallet({
     <div className="space-y-2">
       <Button
         type="button"
-        variant="outline"
+        variant={mode === "login" ? "default" : "outline"}
         onClick={connect}
         disabled={pending}
         className={mode === "login" ? "h-11 w-full text-base font-semibold" : "h-10 px-4"}

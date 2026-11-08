@@ -11,7 +11,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background md:hidden"
+      className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/90 backdrop-blur-md md:hidden"
     >
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {customerNav.map(({ href, label, icon: Icon }) => {
@@ -23,7 +23,7 @@ export function BottomNav() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex flex-col items-center gap-1 px-2 py-2 text-[13px] leading-4 font-medium transition-colors",
-                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  active ? "text-hibiscus" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="size-5" aria-hidden />
