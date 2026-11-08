@@ -126,9 +126,44 @@ function toSession(
   };
 }
 
+/** Parse an Anchor Platform SEP-24 transaction callback body (after signature checks). */
+export function parseSep24Webhook(rawBody: string): RampSession {
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    throw new Error("Webhook is not JSON.");
+  }
+  const tx = (body.transaction && typeof body.transaction === "object" ? body.transaction : body) as {
+    id?: unknown;
+    status?: unknown;
+    url?: unknown;
+    amount_in?: unknown;
+    amount_out?: unknown;
+    withdraw_anchor_account?: unknown;
+    withdraw_memo?: unknown;
+    withdraw_memo_type?: unknown;
+  };
+  if (typeof tx.id !== "string" || typeof tx.status !== "string") {
+    throw new Error("Webhook is missing a transaction id or status.");
+  }
+  return {
+    provider: "sep24",
+    reference: tx.id,
+    providerReference: tx.id,
+    status: mapSep24Status(tx.status),
+    interactiveUrl: typeof tx.url === "string" ? tx.url : undefined,
+    amountIn: typeof tx.amount_in === "string" ? tx.amount_in : undefined,
+    amountOut: typeof tx.amount_out === "string" ? tx.amount_out : undefined,
+    withdrawAccount: typeof tx.withdraw_anchor_account === "string" ? tx.withdraw_anchor_account : undefined,
+    withdrawMemo: typeof tx.withdraw_memo === "string" ? tx.withdraw_memo : undefined,
+    withdrawMemoType: typeof tx.withdraw_memo_type === "string" ? tx.withdraw_memo_type : undefined,
+  };
+}
+
 /**
  * SEP-24 adapter. Interactive URL + JWT live on the caller; this class talks to the anchor.
- * `parseWebhook` is unused — we poll `/transaction`.
+ * Status is polled via `getStatus`; `parseWebhook` handles Anchor Platform callbacks.
  */
 export class Sep24RampAdapter implements PaymentRampAdapter {
   readonly provider = "sep24" as const;
@@ -194,8 +229,8 @@ export class Sep24RampAdapter implements PaymentRampAdapter {
     };
   }
 
-  async parseWebhook(): Promise<RampSession> {
-    throw new Error("SEP-24 uses polling, not webhooks.");
+  async parseWebhook(_headers: Headers, rawBody: string): Promise<RampSession> {
+    return parseSep24Webhook(rawBody);
   }
 }
 

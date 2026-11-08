@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,17 +22,22 @@ interface WalletChoice {
 export function CashOutPanel({
   wallets,
   kycStatus,
+  defaultAmount,
+  payoutId,
 }: {
   wallets: WalletChoice[];
   kycStatus?: KycStatus | null;
+  defaultAmount?: string;
+  payoutId?: string;
 }) {
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(defaultAmount ?? "");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [ramp, setRamp] = useState<{ rampId: string; url: string; status: string; message: string } | null>(null);
   const [kyc, setKyc] = useState<{ message: string; fields: KycField[]; pending?: boolean } | null>(null);
+  const formId = useId();
   const selected = wallets.find((wallet) => wallet.id === walletId);
 
   const apply = async (step: CashOutResult): Promise<boolean> => {
@@ -48,7 +53,7 @@ export function CashOutPanel({
     }
     if (step.step === "sep10") {
       const signedXdr = await signStellarTransaction(step.challengeXdr, step.address);
-      return apply(await finishSep10CashOut({ walletId, signedXdr, amountUsdc: amount }));
+      return apply(await finishSep10CashOut({ walletId, signedXdr, amountUsdc: amount, payoutId }));
     }
     if (step.step === "kyc") {
       setKyc({ message: step.message, fields: step.fields });
@@ -75,7 +80,7 @@ export function CashOutPanel({
         return;
       }
       try {
-        await apply(await beginCashOut({ walletId: selected.id, amountUsdc: amount }));
+        await apply(await beginCashOut({ walletId: selected.id, amountUsdc: amount, payoutId }));
       } catch (err) {
         setError(walletUserMessage(err) ?? "Cash-out was not signed.");
       }
@@ -105,7 +110,7 @@ export function CashOutPanel({
         <legend className="text-sm font-medium">Payout wallet</legend>
         {wallets.map((wallet) => (
           <label key={wallet.id} className="flex items-center gap-2 text-sm">
-            <input type="radio" name="cashout-wallet" value={wallet.id} checked={walletId === wallet.id} onChange={() => setWalletId(wallet.id)} />
+            <input type="radio" name={`cashout-wallet-${formId}`} value={wallet.id} checked={walletId === wallet.id} onChange={() => setWalletId(wallet.id)} />
             <span>{wallet.kind === "freighter" ? "Stellar wallet" : "BY Tickets wallet"}</span>
             <span className="text-muted-foreground font-mono text-xs">
               {wallet.publicKey.slice(0, 4)}…{wallet.publicKey.slice(-4)}

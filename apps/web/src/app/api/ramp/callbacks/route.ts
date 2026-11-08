@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyAnchorCallback } from "@/lib/payments/callback";
 import { fieldsFromCustomer, type Sep12FieldSpec } from "@/lib/payments/sep12";
 import { mapSep12Status } from "@/lib/payments/kyc-status";
-import { mapSep24Status } from "@/lib/payments/status";
+import { parseSep24Webhook } from "@/lib/payments/sep24";
 import { persistStatus } from "@/lib/payments/ramp-flow";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { createSupabaseAdminClient, supabaseAdminConfigured } from "@/lib/supabase/server";
@@ -63,15 +63,16 @@ export async function POST(request: Request) {
     await query;
   }
 
-  const tx = (body.transaction && typeof body.transaction === "object" ? body.transaction : body) as {
-    id?: string;
-    status?: string;
-  };
-  if (tx.id && tx.status && !SEP12.has(tx.status.toUpperCase())) {
-    await admin
-      .from("ramp_transactions")
-      .update({ status: persistStatus(mapSep24Status(tx.status)) })
-      .eq("anchor_tx_id", tx.id);
+  if (!looksLikeCustomer) {
+    try {
+      const session = parseSep24Webhook(raw);
+      await admin
+        .from("ramp_transactions")
+        .update({ status: persistStatus(session.status) })
+        .eq("anchor_tx_id", session.providerReference);
+    } catch {
+      // Customer-only payloads (or malformed tx bodies) are ignored here; polling still updates status.
+    }
   }
 
   return NextResponse.json({ ok: true });

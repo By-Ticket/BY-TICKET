@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/payments/pricing";
 import { explorerUrl, stellarConfig } from "@/lib/stellar/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BuyPanel } from "./buy-panel";
+import { ResalePanel } from "./resale-panel";
 
 function when(iso: string) {
   return new Intl.DateTimeFormat("en-ZM", {
@@ -50,6 +51,11 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   if (!tier) notFound();
 
   const { data: organizer } = await supabase.from("organizers").select("name").eq("id", event.organizer_id).maybeSingle();
+  const { data: listings } = await supabase
+    .from("ticket_listings")
+    .select("id, price_units, tickets!inner(chain_ticket_id, event_id)")
+    .eq("status", "listed")
+    .eq("tickets.event_id", event.id);
   const viewer = await getViewer();
   const { data: wallets } = viewer
     ? await supabase.from("wallets").select("id, kind, public_key").order("created_at")
@@ -113,6 +119,21 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             kind: wallet.kind,
             publicKey: wallet.public_key,
           }))}
+        />
+        <ResalePanel
+          wallets={(wallets ?? []).map((wallet) => ({
+            id: wallet.id,
+            kind: wallet.kind,
+            publicKey: wallet.public_key,
+          }))}
+          listings={(listings ?? []).map((listing) => {
+            const ticket = Array.isArray(listing.tickets) ? listing.tickets[0] : listing.tickets;
+            return {
+              id: listing.id,
+              priceUsdc: formatPrice(BigInt(listing.price_units)).usdc,
+              ticketLabel: `Ticket #${ticket?.chain_ticket_id ?? ""}`,
+            };
+          })}
         />
         {stellarConfig.contracts.eventTicket && (
           <a

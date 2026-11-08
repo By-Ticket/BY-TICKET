@@ -9,7 +9,7 @@
 | 3 | Database schema (Supabase + RLS) + auth | ✅ done (migrations to be applied to the Supabase project) |
 | 4 | Wallet connection (Freighter + custodial) + ticket purchase | ⏳ wallet login + checkout built; a buy needs test USDC from the token issuer |
 | 5 | My Tickets, rotating signed QR, offline scanner check-in | ⬜ |
-| 6 | Organizer dashboard (events, tiers, analytics, payouts, rules) | ⬜ |
+| 6 | Organizer dashboard (events, tiers, analytics, payouts, rules) | ⏳ create / complete / cancel / release / milestone + cash-out wired; analytics still later |
 | 7 | Rewards (BY Points) + proof-of-attendance badges | ⬜ |
 | 8 | Polish: mobile UX, brand, empty/error/loading states, seed data | ⬜ |
 
@@ -33,8 +33,9 @@
 
 ### Secondary marketplace
 - Organizer-controlled resale: price caps, royalties to organizer/artist, and primary-sale escrow are now
-  enforced on-chain (`event_ticket` v2). Remaining: a customer-facing resale UI, anti-scalping limits per
-  account, and indexer support for `escrowed` / `released` / `refunded` / `royalty_paid`.
+  enforced on-chain (`event_ticket` v2). List, quote (fee/royalty/seller), and `transfer_ticket` settlement
+  are wired in the web app. Remaining: anti-scalping limits per account, and indexer support for
+  `escrowed` / `released` / `refunded` / `royalty_paid`.
 
 ### Sponsor & vendor perks
 - Vendors (food, drinks, merch) register perks redeemable with BY Points at the venue.
