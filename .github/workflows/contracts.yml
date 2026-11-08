@@ -24,3 +24,29 @@ jobs:
           workspaces: contracts
       - name: cargo test
         run: cargo test
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.91"
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+      - name: Install Stellar CLI
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://github.com/stellar/stellar-cli/releases/download/v28.1.0/stellar-cli-28.1.0-x86_64-unknown-linux-gnu.tar.gz \
+            | tar -xz
+          sudo mv stellar /usr/local/bin/stellar
+          stellar --version
+      - name: stellar contract build
+        working-directory: contracts
+        run: stellar contract build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contract-wasm
+          path: contracts/target/wasm32v1-none/release/*.wasm
