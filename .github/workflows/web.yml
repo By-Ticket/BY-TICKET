@@ -23,4 +23,4 @@ jobs:
       - name: Unit tests
         run: npm test
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npx next typegen && npx tsc --noEmit
