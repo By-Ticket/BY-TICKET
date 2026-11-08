@@ -19,7 +19,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: Install
-        run: npm ci
+        run: npm install
       - name: Unit tests
         run: npm test
       - name: Typecheck
