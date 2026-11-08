@@ -67,7 +67,17 @@ platform account so users never need XLM. Users can "graduate" to self-custody b
 ### D-010 Payments: USDC/XLM on Stellar, ZMW shown for display, mobile money behind an adapter
 Prices are stored in USDC (7-decimal stroop-style integers on-chain). ZMW is a display conversion from an FX
 rate (`NEXT_PUBLIC_ZMW_PER_USDC` fallback; pluggable provider later). Mobile money (MTN MoMo, Airtel Money,
-Zamtel Kwacha) is behind a `PaymentRampAdapter` interface with a stub implementation only.
+Zamtel Kwacha) is behind a `PaymentRampAdapter` interface. The live fiat path is a SEP-24 Stellar Anchor
+(`Sep24RampAdapter`); the stub stays for tests and local dev. See D-037.
+
+### D-037 SEP-24 Stellar Anchor for fiat on/off-ramps
+`RAMP_PROVIDER=stub|sep24` (alias `PAYMENT_RAMP_PROVIDER`). On testnet, `ANCHOR_HOME_DOMAIN` defaults to
+`testanchor.stellar.org`. The app fetches `stellar.toml` (`TRANSFER_SERVER_SEP0024`, `WEB_AUTH_ENDPOINT`,
+`SIGNING_KEY`), runs SEP-10 (wallet signs the challenge; JWT is an httpOnly cookie, never `localStorage`),
+and drives SEP-24 interactive deposit/withdraw. Checkout offers **Pay with local currency**; organizers
+cash out after `release_payout`. Transfers persist in `ramp_transactions` with RLS so users only see
+their own rows. If `/info` does not list the ticket asset, the UI says so instead of starting a transfer.
+MTN / Airtel / Zamtel remain metadata for a future Zambian anchor.
 
 ### D-011 Rate limiting: Upstash Redis when configured, in-memory fallback
 Serverless-friendly; dev works with zero setup. In-memory limits are per-instance, so production must

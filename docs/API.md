@@ -44,6 +44,9 @@ All validate with zod, are rate-limited per IP and per identity, and run as the 
 | `updateProfile` (`/account`) | signed in | `display_name`, `phone?`, `city?` | |
 | `submitOrganizerApplication` (`/organizer`) | signed in | `name`, `slug?`, `city`, `contact_email`, `contact_phone`, `bio?`, `payout_public_key?` | creates a pending application, or updates and resubmits a rejected one |
 | `reviewOrganizer` (`/admin`) | admin | `organizer_id`, `status` (`approved` / `rejected` / `suspended`), `note?` | a note is required to reject |
+| `beginCheckout` / `completeCheckout` (`/events/[id]`) | signed in | wallet, method `wallet` \| `mobile_money` \| `local_currency` | local currency is SEP-24; JWT stays in an httpOnly cookie |
+| `finishSep10Checkout` / `pollLocalCurrencyCheckout` | signed in | signed challenge or ramp id | polls the anchor until deposit completes, then mints |
+| `beginCashOut` / `pollCashOut` / `submitCashOutPayment` (`/organizer`) | organizer | amount + wallet | SEP-24 withdraw after on-chain `release_payout` |
 
 ### Database RPCs (`supabase.rpc(name, args)`)
 

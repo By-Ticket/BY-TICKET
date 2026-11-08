@@ -20,7 +20,10 @@ const serverSchema = z.object({
     z.base64url().refine((v) => Buffer.from(v, "base64url").length === 32, "must be a 32-byte Ed25519 seed"),
   ),
   PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(2_000).default(250),
-  PAYMENT_RAMP_PROVIDER: z.enum(["stub", "mtn_momo", "airtel_money", "zamtel_kwacha"]).default("stub"),
+  RAMP_PROVIDER: z.enum(["stub", "sep24", "mtn_momo", "airtel_money", "zamtel_kwacha"]).default("stub"),
+  ANCHOR_HOME_DOMAIN: optional(z.string().min(3).max(253)),
+  /** @deprecated Use RAMP_PROVIDER. Kept so existing .env.local files still work. */
+  PAYMENT_RAMP_PROVIDER: optional(z.enum(["stub", "sep24", "mtn_momo", "airtel_money", "zamtel_kwacha"])),
   UPSTASH_REDIS_REST_URL: optional(z.url()),
   UPSTASH_REDIS_REST_TOKEN: optional(z.string()),
   ADMIN_EMAILS: z
@@ -36,7 +39,10 @@ const serverSchema = z.object({
 
 export type ServerEnv = z.infer<typeof serverSchema>;
 
-const result = serverSchema.safeParse(process.env);
+const result = serverSchema.safeParse({
+  ...process.env,
+  RAMP_PROVIDER: process.env.RAMP_PROVIDER || process.env.PAYMENT_RAMP_PROVIDER || "stub",
+});
 if (!result.success) {
   throw new Error(`Invalid server environment:\n${z.prettifyError(result.error)}`);
 }

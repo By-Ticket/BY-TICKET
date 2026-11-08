@@ -1,20 +1,34 @@
 /**
- * Mobile money on/off-ramp boundary (MTN MoMo, Airtel Money, Zamtel Kwacha).
- *
- * The rest of the app only talks to `PaymentRampAdapter`. A real provider
- * (direct API or a Stellar anchor via SEP-24/31) implements this interface; the
- * ticket is minted only after `getStatus` reports `settled` and USDC has landed.
+ * Fiat on/off-ramp boundary. Ticket minting waits until `getStatus` reports `settled`
+ * and the USDC has landed. Mobile-money brands (MTN, Airtel, Zamtel) stay as metadata
+ * for future anchors — see `providers.ts`.
  */
 
-export type RampProvider = "stub" | "mtn_momo" | "airtel_money" | "zamtel_kwacha";
+import { serverEnv } from "@/lib/env.server";
+import { stellarConfig } from "@/lib/stellar/config";
+import { fetchStellarToml } from "./toml";
+import { Sep24RampAdapter } from "./sep24";
 
-export type RampStatus = "pending" | "awaiting_customer" | "settled" | "failed" | "expired";
+export type RampProvider = "stub" | "sep24" | "mtn_momo" | "airtel_money" | "zamtel_kwacha";
+
+export type RampStatus =
+  | "pending"
+  | "awaiting_customer"
+  | "settled"
+  | "failed"
+  | "error"
+  | "refunded"
+  | "expired";
 
 export interface OnRampRequest {
   /** Our idempotency key; providers must de-duplicate on it. */
   reference: string;
   /** Amount the customer pays, in ngwee (ZMW minor units). */
   amountNgwee: bigint;
+  /** Optional USDC amount string (7 decimals) for SEP-24. */
+  amountUsdc?: string;
+  assetCode?: string;
+  assetIssuer?: string;
   /** MSISDN in E.164, e.g. +260971234567. */
   phone: string;
   /** Stellar account (G...) or contract (C...) that receives the USDC. */
@@ -25,6 +39,11 @@ export interface OffRampRequest {
   reference: string;
   /** USDC to pay out, in 7-decimal units. */
   amountUsdcUnits: bigint;
+  /** Human-readable USDC amount for SEP-24. */
+  amountUsdc?: string;
+  assetCode?: string;
+  assetIssuer?: string;
+  sourceAccount?: string;
   phone: string;
 }
 
@@ -35,7 +54,15 @@ export interface RampSession {
   status: RampStatus;
   /** Shown to the user, e.g. "Approve the prompt on your phone". */
   instructions?: string;
+  interactiveUrl?: string;
+  withdrawAccount?: string;
+  withdrawMemo?: string;
+  withdrawMemoType?: string;
+  amountIn?: string;
+  amountOut?: string;
 }
+
+export type RampAdapter = PaymentRampAdapter;
 
 export interface PaymentRampAdapter {
   readonly provider: RampProvider;
@@ -84,10 +111,25 @@ export class StubRampAdapter implements PaymentRampAdapter {
   }
 }
 
-export function createRampAdapter(provider: RampProvider): PaymentRampAdapter {
+export function rampProvider(): RampProvider {
+  return serverEnv.RAMP_PROVIDER;
+}
+
+export function defaultAnchorHomeDomain(): string {
+  return serverEnv.ANCHOR_HOME_DOMAIN ?? (stellarConfig.isTestnet ? "testanchor.stellar.org" : "");
+}
+
+export async function createRampAdapter(provider: RampProvider = rampProvider(), jwt?: string): Promise<PaymentRampAdapter> {
   switch (provider) {
     case "stub":
       return new StubRampAdapter();
+    case "sep24": {
+      const domain = defaultAnchorHomeDomain();
+      if (!domain) throw new Error("Set ANCHOR_HOME_DOMAIN for the SEP-24 ramp.");
+      if (!jwt) throw new Error("Sign in with the Stellar wallet at the anchor first.");
+      const toml = await fetchStellarToml(domain);
+      return new Sep24RampAdapter(toml, jwt);
+    }
     default:
       throw new Error(`Payment ramp provider "${provider}" is not implemented yet (see docs/ROADMAP.md)`);
   }

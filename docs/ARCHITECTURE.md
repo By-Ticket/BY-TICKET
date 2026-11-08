@@ -194,7 +194,7 @@ apps/web/src/
     stellar/      network config, RPC client, contract clients, Freighter helpers
     supabase/     browser / server / admin clients, generated database.types.ts
     validation/   zod schemas shared by Server Actions and tests
-    payments/     pricing (USDC ↔ ZMW), PaymentRampAdapter + stub
+    payments/     pricing (USDC ↔ ZMW), PaymentRampAdapter, stub + Sep24RampAdapter
     security/     rate limiting, Server Action guard
 contracts/        Soroban workspace: event_ticket, rewards, attendance_badge
 supabase/         migrations/, tests/ (RLS suite + Supabase shim), seed.sql
