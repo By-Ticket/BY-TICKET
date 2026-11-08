@@ -20,9 +20,14 @@ Liveness and configuration check (never exposes secrets).
   "app": "BY Tickets",
   "network": "testnet",
   "rpc": { "url": "https://soroban-testnet.stellar.org", "reachable": true, "latestLedger": 123456 },
-  "configured": { "supabase": false, "contracts": false, "qrSigning": false, "custodialKeys": false }
+  "configured": { "supabase": false, "contracts": false, "qrSigning": false, "custodialKeys": false, "kycCallback": false, "kycThreshold": 0 }
 }
 ```
+
+### `POST /api/ramp/callbacks`
+Anchor Platform customer and transaction status webhooks. Auth is `Authorization: Bearer <ANCHOR_CALLBACK_SECRET>`,
+`x-callback-secret`, or `signature: sha256=<hmac>`. Updates `kyc_customers` / `ramp_transactions` status only —
+never identity documents.
 
 ### Auth routes
 
@@ -44,9 +49,10 @@ All validate with zod, are rate-limited per IP and per identity, and run as the 
 | `updateProfile` (`/account`) | signed in | `display_name`, `phone?`, `city?` | |
 | `submitOrganizerApplication` (`/organizer`) | signed in | `name`, `slug?`, `city`, `contact_email`, `contact_phone`, `bio?`, `payout_public_key?` | creates a pending application, or updates and resubmits a rejected one |
 | `reviewOrganizer` (`/admin`) | admin | `organizer_id`, `status` (`approved` / `rejected` / `suspended`), `note?` | a note is required to reject |
-| `beginCheckout` / `completeCheckout` (`/events/[id]`) | signed in | wallet, method `wallet` \| `mobile_money` \| `local_currency` | local currency is SEP-24; JWT stays in an httpOnly cookie |
+| `beginCheckout` / `completeCheckout` (`/events/[id]`) | signed in | wallet, method `wallet` \| `mobile_money` \| `local_currency` | local currency is SEP-24; JWT stays in an httpOnly cookie; SEP-12 gates the deposit |
 | `finishSep10Checkout` / `pollLocalCurrencyCheckout` | signed in | signed challenge or ramp id | polls the anchor until deposit completes, then mints |
-| `beginCashOut` / `pollCashOut` / `submitCashOutPayment` (`/organizer`) | organizer | amount + wallet | SEP-24 withdraw after on-chain `release_payout` |
+| `checkKyc` / `finishSep10Kyc` / `submitKyc` | signed in | wallet + field values / files | files go to the anchor only; status is stored in `kyc_customers` |
+| `beginCashOut` / `pollCashOut` / `submitCashOutPayment` (`/organizer`) | organizer | amount + wallet | SEP-24 withdraw after on-chain `release_payout`; blocked until KYC is ACCEPTED |
 
 ### Database RPCs (`supabase.rpc(name, args)`)
 

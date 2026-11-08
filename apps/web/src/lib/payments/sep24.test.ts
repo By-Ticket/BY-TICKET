@@ -9,6 +9,7 @@ const toml: AnchorToml = {
   signingKey: "GCHLHDBOKG2JWMJQBTLSL5XG6NO7ESXI2TAQKZXCXWXB5WI2X6W233PR",
   webAuthEndpoint: "https://testanchor.stellar.org/auth",
   transferServerSep24: "https://testanchor.stellar.org/sep24",
+  kycServer: "https://testanchor.stellar.org/sep12",
   currencies: [{ code: "USDC" }],
 };
 

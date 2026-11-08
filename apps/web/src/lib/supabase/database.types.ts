@@ -428,6 +428,53 @@ export type Database = {
           },
         ]
       }
+      kyc_customers: {
+        Row: {
+          account: string | null
+          anchor_customer_id: string | null
+          created_at: string
+          fields_needed: Json
+          home_domain: string | null
+          message: string | null
+          provider: string
+          status: Database["public"]["Enums"]["kyc_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account?: string | null
+          anchor_customer_id?: string | null
+          created_at?: string
+          fields_needed?: Json
+          home_domain?: string | null
+          message?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["kyc_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account?: string | null
+          anchor_customer_id?: string | null
+          created_at?: string
+          fields_needed?: Json
+          home_domain?: string | null
+          message?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["kyc_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kyc_customers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           created_at: string
@@ -1363,6 +1410,7 @@ export type Database = {
       chain_sync_status: "pending" | "confirmed" | "failed"
       checkin_result: "accepted" | "duplicate" | "invalid" | "not_scanner"
       event_status: "draft" | "published" | "cancelled" | "completed"
+      kyc_status: "accepted" | "processing" | "needs_info" | "rejected"
       order_status:
         | "pending"
         | "submitted"
@@ -1515,6 +1563,7 @@ export const Constants = {
       chain_sync_status: ["pending", "confirmed", "failed"],
       checkin_result: ["accepted", "duplicate", "invalid", "not_scanner"],
       event_status: ["draft", "published", "cancelled", "completed"],
+      kyc_status: ["accepted", "processing", "needs_info", "rejected"],
       order_status: [
         "pending",
         "submitted",

@@ -22,6 +22,10 @@ const serverSchema = z.object({
   PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(2_000).default(250),
   RAMP_PROVIDER: z.enum(["stub", "sep24", "mtn_momo", "airtel_money", "zamtel_kwacha"]).default("stub"),
   ANCHOR_HOME_DOMAIN: optional(z.string().min(3).max(253)),
+  /** USDC amount below which fan deposits may skip KYC when the anchor allows it. */
+  KYC_THRESHOLD_AMOUNT: z.coerce.number().min(0).default(0),
+  /** Shared secret the Anchor Platform sends on customer/transaction callbacks. */
+  ANCHOR_CALLBACK_SECRET: optional(z.string().min(16)),
   /** @deprecated Use RAMP_PROVIDER. Kept so existing .env.local files still work. */
   PAYMENT_RAMP_PROVIDER: optional(z.enum(["stub", "sep24", "mtn_momo", "airtel_money", "zamtel_kwacha"])),
   UPSTASH_REDIS_REST_URL: optional(z.url()),

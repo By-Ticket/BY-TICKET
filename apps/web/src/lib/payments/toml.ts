@@ -10,6 +10,8 @@ export interface AnchorToml {
   signingKey: string;
   webAuthEndpoint: string;
   transferServerSep24: string;
+  /** SEP-12 KYC server. Falls back to TRANSFER_SERVER, then SEP-24 transfer server. */
+  kycServer: string;
   networkPassphrase?: string;
   currencies: AnchorCurrency[];
 }
@@ -47,8 +49,9 @@ function parseCurrencies(body: string): AnchorCurrency[] {
 export function parseStellarToml(homeDomain: string, body: string): AnchorToml {
   const signingKey = stringField(body, "SIGNING_KEY");
   const webAuthEndpoint = stringField(body, "WEB_AUTH_ENDPOINT");
-  const transferServerSep24 =
-    stringField(body, "TRANSFER_SERVER_SEP0024") ?? stringField(body, "TRANSFER_SERVER");
+  const transferServer = stringField(body, "TRANSFER_SERVER");
+  const transferServerSep24 = stringField(body, "TRANSFER_SERVER_SEP0024") ?? transferServer;
+  const kycServer = stringField(body, "KYC_SERVER") ?? transferServer ?? transferServerSep24;
   if (!signingKey || !/^G[A-Z2-7]{55}$/.test(signingKey)) {
     throw new TomlParseError("stellar.toml is missing a valid SIGNING_KEY");
   }
@@ -58,11 +61,15 @@ export function parseStellarToml(homeDomain: string, body: string): AnchorToml {
   if (!transferServerSep24) {
     throw new TomlParseError("stellar.toml is missing TRANSFER_SERVER_SEP0024");
   }
+  if (!kycServer) {
+    throw new TomlParseError("stellar.toml is missing KYC_SERVER and TRANSFER_SERVER");
+  }
   return {
     homeDomain: homeDomain.replace(/^https?:\/\//, "").replace(/\/$/, ""),
     signingKey,
     webAuthEndpoint: webAuthEndpoint.replace(/\/$/, ""),
     transferServerSep24: transferServerSep24.replace(/\/$/, ""),
+    kycServer: kycServer.replace(/\/$/, ""),
     networkPassphrase: stringField(body, "NETWORK_PASSPHRASE"),
     currencies: parseCurrencies(body),
   };

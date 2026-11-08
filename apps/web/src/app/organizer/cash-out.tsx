@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InteractiveRamp } from "@/components/payments/interactive-ramp";
+import { KycForm } from "@/components/payments/kyc-form";
+import type { KycField, KycStatus } from "@/lib/payments/kyc-status";
 import { signStellarTransaction, walletUserMessage } from "@/lib/stellar/wallets-kit";
+import { finishSep10Kyc, type KycActionResult } from "@/app/kyc/actions";
 import { beginCashOut, finishSep10CashOut, pollCashOut, submitCashOutPayment, type CashOutResult } from "./ramp-actions";
 
 interface WalletChoice {
@@ -16,13 +19,20 @@ interface WalletChoice {
   publicKey: string;
 }
 
-export function CashOutPanel({ wallets }: { wallets: WalletChoice[] }) {
+export function CashOutPanel({
+  wallets,
+  kycStatus,
+}: {
+  wallets: WalletChoice[];
+  kycStatus?: KycStatus | null;
+}) {
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [ramp, setRamp] = useState<{ rampId: string; url: string; status: string; message: string } | null>(null);
+  const [kyc, setKyc] = useState<{ message: string; fields: KycField[]; pending?: boolean } | null>(null);
   const selected = wallets.find((wallet) => wallet.id === walletId);
 
   const apply = async (step: CashOutResult): Promise<boolean> => {
@@ -39,6 +49,14 @@ export function CashOutPanel({ wallets }: { wallets: WalletChoice[] }) {
     if (step.step === "sep10") {
       const signedXdr = await signStellarTransaction(step.challengeXdr, step.address);
       return apply(await finishSep10CashOut({ walletId, signedXdr, amountUsdc: amount }));
+    }
+    if (step.step === "kyc") {
+      setKyc({ message: step.message, fields: step.fields });
+      return false;
+    }
+    if (step.step === "kyc_pending") {
+      setKyc({ message: step.message, fields: [], pending: true });
+      return false;
     }
     if (step.step === "pay") {
       const signedXdr = await signStellarTransaction(step.xdr, step.address);
@@ -99,7 +117,45 @@ export function CashOutPanel({ wallets }: { wallets: WalletChoice[] }) {
         <Label htmlFor="cashout-amount">Amount (USDC)</Label>
         <Input id="cashout-amount" inputMode="decimal" placeholder="10.00" value={amount} onChange={(event) => setAmount(event.target.value)} />
       </div>
-      {ramp ? (
+      <p className="text-muted-foreground text-sm">
+        Identity verification:{" "}
+        <span className="text-foreground font-medium">{(kycStatus ?? "not started").replace("_", " ")}</span>
+        {kycStatus !== "accepted" ? " — cash-out needs an accepted check." : ""}
+      </p>
+      {kyc?.pending ? (
+        <div className="space-y-3 rounded-xl border p-4">
+          <p className="text-muted-foreground text-sm">{kyc.message}</p>
+          <Button type="button" variant="outline" disabled={pending} onClick={() => { setKyc(null); run(); }} className="h-10 px-4">
+            Check again
+          </Button>
+        </div>
+      ) : kyc ? (
+        <KycForm
+          walletId={walletId}
+          kind="withdraw"
+          amountUsdc={Number(amount || 0)}
+          message={kyc.message}
+          fields={kyc.fields}
+          onResult={async (result: KycActionResult) => {
+            let next = result;
+            if (next.ok && next.step === "sep10") {
+              const signedXdr = await signStellarTransaction(next.challengeXdr, next.address);
+              next = await finishSep10Kyc({ walletId, signedXdr, kind: "withdraw", amountUsdc: Number(amount || 0) });
+            }
+            if (!next.ok) {
+              setError(next.error);
+              return;
+            }
+            if (next.step === "ready") {
+              setKyc(null);
+              run();
+              return;
+            }
+            if (next.step === "kyc_pending") setKyc({ message: next.message, fields: [], pending: true });
+            if (next.step === "kyc") setKyc({ message: next.message, fields: next.fields });
+          }}
+        />
+      ) : ramp ? (
         <InteractiveRamp url={ramp.url} status={ramp.status} message={ramp.message} onCancel={() => setRamp(null)} />
       ) : (
         <Button type="button" disabled={pending || !amount} onClick={run} className="h-10 px-4">

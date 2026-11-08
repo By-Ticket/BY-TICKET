@@ -79,6 +79,14 @@ cash out after `release_payout`. Transfers persist in `ramp_transactions` with R
 their own rows. If `/info` does not list the ticket asset, the UI says so instead of starting a transfer.
 MTN / Airtel / Zamtel remain metadata for a future Zambian anchor.
 
+### D-038 SEP-12 KYC gates for deposits and organizer payouts
+KYC runs against the same anchor as SEP-24 (`KYC_SERVER` from `stellar.toml`, falling back to
+`TRANSFER_SERVER`). Status maps `ACCEPTED` / `PROCESSING` / `NEEDS_INFO` / `REJECTED`. Fan deposits
+may skip KYC below `KYC_THRESHOLD_AMOUNT` when the status is not rejected; organizer cash-out always
+needs `ACCEPTED`. Identity documents go only to the anchor; `kyc_customers` stores status and the
+names of missing fields. Anchor callbacks hit `POST /api/ramp/callbacks` (Bearer / `x-callback-secret`
+/ HMAC). `RAMP_PROVIDER=stub` auto-approves KYC.
+
 ### D-011 Rate limiting: Upstash Redis when configured, in-memory fallback
 Serverless-friendly; dev works with zero setup. In-memory limits are per-instance, so production must
 set `UPSTASH_REDIS_REST_URL`/`_TOKEN`.
