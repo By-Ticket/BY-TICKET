@@ -51,7 +51,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
             autoFocus
             aria-invalid={Boolean(state.error) || undefined}
             aria-describedby={state.error ? "login-error" : "login-message"}
-            className="h-11 text-center font-mono text-lg tracking-[0.4em]"
+            className="h-12 rounded-xl text-center font-mono text-[28px] tracking-[0.4em]"
           />
         </div>
       )}
@@ -72,7 +72,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
         name="intent"
         value={state.step === "email" ? "send" : "verify"}
         disabled={pending}
-        className="h-11 w-full text-base font-semibold"
+        className="h-12 w-full rounded-xl text-[15px] font-semibold"
       >
         {pending ? (
           <Loader2 className="animate-spin" aria-hidden />

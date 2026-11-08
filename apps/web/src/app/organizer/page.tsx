@@ -33,7 +33,7 @@ export default async function OrganizerPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
       <div>
-        <h1 className="font-heading text-3xl font-extrabold">Sell tickets on BY</h1>
+        <h1 className="text-[28px] leading-8 font-semibold">Sell tickets on BY</h1>
         <p className="text-muted-foreground mt-1">
           Tickets that can&apos;t be faked, payouts split automatically with your artists, and fans who earn rewards
           for showing up.
@@ -42,7 +42,7 @@ export default async function OrganizerPage() {
 
       {org?.status === "pending" && (
         <StatusCard
-          icon={<Clock className="text-sun size-5" aria-hidden />}
+          icon={<Clock className="size-5" aria-hidden />}
           title="Application under review"
           text={`Thanks, ${org.name}. We review new organizers within 2 working days and will email ${org.contact_email ?? viewer.email}.`}
         />

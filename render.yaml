@@ -1,0 +1,72 @@
+# Free Render web service for the Next.js app.
+# The UI, server actions, and /api routes are one Node server. There is no
+# separate backend to deploy. Database, Auth, and Storage stay on Supabase.
+# Set every secret in the Render dashboard (sync: false). Do not put values here.
+# Steps and the full env list: SETUP.md
+services:
+  - type: web
+    name: by-tickets
+    runtime: node
+    plan: free
+    rootDir: apps/web
+    buildCommand: npm ci && npm run build
+    startCommand: npx next start --hostname 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_APP_NAME
+        value: "BY Tickets"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_STELLAR_NETWORK
+        value: testnet
+      - key: NEXT_PUBLIC_STELLAR_RPC_URL
+        value: https://soroban-testnet.stellar.org
+      - key: NEXT_PUBLIC_STELLAR_HORIZON_URL
+        value: https://horizon-testnet.stellar.org
+      - key: NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE
+        value: "Test SDF Network ; September 2015"
+      - key: NEXT_PUBLIC_EVENT_TICKET_CONTRACT_ID
+        sync: false
+      - key: NEXT_PUBLIC_REWARDS_CONTRACT_ID
+        sync: false
+      - key: NEXT_PUBLIC_BADGE_CONTRACT_ID
+        sync: false
+      - key: NEXT_PUBLIC_STELLAR_ADMIN_PUBLIC_KEY
+        sync: false
+      - key: NEXT_PUBLIC_USDC_ASSET_CODE
+        value: USDC
+      - key: NEXT_PUBLIC_USDC_ISSUER
+        sync: false
+      - key: NEXT_PUBLIC_USDC_CONTRACT_ID
+        sync: false
+      - key: STELLAR_PLATFORM_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_STELLAR_PLATFORM_PUBLIC_KEY
+        sync: false
+      - key: CUSTODIAL_KEY_ENCRYPTION_KEY
+        sync: false
+      - key: QR_CREDENTIAL_SIGNING_KEY
+        sync: false
+      - key: NEXT_PUBLIC_QR_CREDENTIAL_PUBLIC_KEY
+        sync: false
+      - key: NEXT_PUBLIC_QR_ROTATION_SECONDS
+        value: "20"
+      - key: NEXT_PUBLIC_ZMW_PER_USDC
+        value: "26.5"
+      - key: PLATFORM_FEE_BPS
+        value: "250"
+      - key: PAYMENT_RAMP_PROVIDER
+        value: stub
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false

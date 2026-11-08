@@ -4,6 +4,7 @@ import { serverEnv } from "@/lib/env.server";
 import { contractsConfigured, stellarConfig } from "@/lib/stellar/config";
 import { getRpc } from "@/lib/stellar/rpc";
 import { supabaseConfigured } from "@/lib/supabase/client";
+import { createSupabaseAdminClient, supabaseAdminConfigured } from "@/lib/supabase/server";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 
 /** Liveness + configuration check. Reports which integrations are configured, never their values. */
@@ -30,11 +31,27 @@ export async function GET(request: Request) {
     // Unreachable RPC is reported, not thrown: health must still answer offline.
   }
 
+  // Read-only probe. Writes stay on the signed-in flows (profile, organizer application).
+  let database: { reachable: boolean; settings?: number } = { reachable: false };
+  if (supabaseAdminConfigured) {
+    try {
+      const admin = createSupabaseAdminClient();
+      const { count, error } = await Promise.race([
+        admin.from("platform_settings").select("key", { count: "exact", head: true }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4_000)),
+      ]);
+      database = error ? { reachable: false } : { reachable: true, settings: count ?? 0 };
+    } catch {
+      database = { reachable: false };
+    }
+  }
+
   return NextResponse.json({
     status: "ok",
     app: publicEnv.NEXT_PUBLIC_APP_NAME,
     network: stellarConfig.network,
     rpc: rpcStatus,
+    database,
     configured: {
       supabase: supabaseConfigured && Boolean(serverEnv.SUPABASE_SECRET_KEY),
       contracts: contractsConfigured,

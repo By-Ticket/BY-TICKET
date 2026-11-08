@@ -34,13 +34,13 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-      <h1 className="font-heading text-3xl font-extrabold">Platform admin</h1>
+      <h1 className="text-[28px] leading-8 font-semibold">Platform admin</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map(([label, value]) => (
-          <div key={label} className="bg-card rounded-xl border p-3">
-            <p className="text-muted-foreground text-xs">{label}</p>
-            <p className="font-heading text-2xl font-extrabold">{value ?? 0}</p>
+          <div key={label} className="shadow-soft rounded-xl border border-border bg-card p-4">
+            <p className="text-muted-foreground text-[13px]">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{value ?? 0}</p>
           </div>
         ))}
       </div>

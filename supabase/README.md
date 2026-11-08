@@ -7,9 +7,18 @@
 | `migrations/20261001000300_rpc.sql` | RPCs: `my_organizer`, `resubmit_organizer`, `admin_*` |
 | `migrations/20261001000400_storage.sql` | `public-media` bucket + folder-scoped upload policies |
 | `tests/` | RLS test suite + a minimal Supabase shim, run in plain Postgres via Docker |
-| `seed.sql` | demo organizers, events and tiers (Phase 8) |
+| `seed.sql` | demo perk (local). Organizers, events, and tiers still arrive with later phases |
 
-## Test locally (no Supabase project needed)
+## Run the app against a local database
+
+```bash
+supabase start --eager          # Postgres + Auth + Storage + Mailpit. See ../SETUP.md
+supabase status --env           # API_URL, PUBLISHABLE_KEY, SECRET_KEY → apps/web/.env.local
+```
+
+Sign-in codes are captured by Mailpit at http://127.0.0.1:54324. They are not sent to a real inbox.
+
+## Test the schema without the full stack (Docker)
 
 ```bash
 npm run db:test    # fresh Postgres in Docker → shim → all migrations → 79 RLS/privilege checks
@@ -32,7 +41,9 @@ Then put the project URL, publishable key and secret key into `apps/web/.env.loc
 2. **URL Configuration**: Site URL = `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`). Redirect URLs: add
    `http://localhost:3000/auth/callback` and your production `/auth/callback`.
 3. **Emails → Magic Link** template: include the code so people can type it on the device where they started,
-   even if the email opens in another app. Recommended body:
+   even if the email opens in another app. Paste this body (also saved at
+   `supabase/templates/magic_link.html`). The local experimental stack cannot load that file,
+   so the sign-in page shows the code instead when `NEXT_PUBLIC_SUPABASE_URL` is on localhost:
 
    ```html
    <h2>Your BY Tickets sign-in code</h2>

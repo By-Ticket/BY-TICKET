@@ -7,13 +7,13 @@ import { customerNav, staffNav } from "./nav-items";
 
 export function SiteHeader() {
   return (
-    <header className="bg-background/85 sticky top-0 z-40 border-b backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
         <Link href="/" aria-label="BY Tickets home">
           <Logo />
         </Link>
         {stellarConfig.isTestnet && (
-          <Badge variant="outline" className="border-sun/50 text-sun">
+          <Badge variant="outline" className="border-border text-muted-foreground font-medium">
             Testnet
           </Badge>
         )}

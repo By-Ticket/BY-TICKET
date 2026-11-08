@@ -50,7 +50,7 @@ friendly to low-bandwidth connections.
 - **Docker Desktop** for contracts: Rust, the WASM target and the Stellar CLI all live in the `soroban` image,
   so you don't install them locally. (Native Rust also works if you prefer: Rust ≥ 1.91, `wasm32v1-none`,
   Stellar CLI 28; see DECISIONS D-014 for the Windows caveats.)
-- A **Supabase** project (Phase 3) — free tier is fine
+- The **Supabase CLI** (2.122+) for a local database. Docker is optional: without it the CLI runs Postgres, Auth, and the API as local processes. A hosted Supabase project works too. See [SETUP.md](SETUP.md).
 - **Freighter** browser extension, set to *Testnet*, for wallet testing
 
 ## Quick start
@@ -68,14 +68,15 @@ npm run contracts:test
 npm run contracts:deploy   # writes contract IDs into apps/web/.env.local
 npm run contracts:smoke    # optional: live end-to-end purchase → check-in on testnet
 
-# 4. database: test the migrations locally, then apply them to your Supabase project
-npm run db:test            # 79 RLS / privilege checks in a throwaway Postgres
-#    apply supabase/migrations/* (see supabase/README.md), then add the Supabase URL + keys
-#    and ADMIN_EMAILS=<your email> to apps/web/.env.local
+# 4. database (local Supabase: migrations + seed). Full steps: SETUP.md
+supabase start --eager
+supabase status --env   # copy API_URL, PUBLISHABLE_KEY, SECRET_KEY into apps/web/.env.local
 
 # 5. run the app
-npm run dev            # http://localhost:3000
-# health check:        http://localhost:3000/api/health  ("contracts": true after deploy)
+npm run build && npm run start     # http://localhost:3000
+# or: npm run dev
+# health check: http://localhost:3000/api/health
+#   database.reachable true means the app read platform_settings
 ```
 
 `npm run setup` copies `apps/web/.env.example` to `apps/web/.env.local` and fills in:
@@ -86,8 +87,9 @@ npm run dev            # http://localhost:3000
 | `QR_CREDENTIAL_SIGNING_KEY` / `NEXT_PUBLIC_QR_CREDENTIAL_PUBLIC_KEY` | Ed25519 pair for signed ticket QR credentials |
 | `STELLAR_PLATFORM_SECRET` / `NEXT_PUBLIC_STELLAR_PLATFORM_PUBLIC_KEY` | testnet platform account (fee sponsor, platform fee receiver) |
 
-You then add your Supabase URL + keys by hand; contract IDs are written by `npm run contracts:deploy`.
-Supabase project setup (migrations, auth URLs, the sign-in email template) is in [supabase/README.md](supabase/README.md).
+You then add the Supabase URL + keys from `supabase status --env` (local) or from a hosted project.
+Step-by-step local run, including every env var: [SETUP.md](SETUP.md).
+Hosted auth URL and email-template setup: [supabase/README.md](supabase/README.md).
 Every variable is documented in [`apps/web/.env.example`](apps/web/.env.example) and validated with zod at startup.
 
 ## Scripts (repo root)
@@ -121,8 +123,10 @@ Every variable is documented in [`apps/web/.env.example`](apps/web/.env.example)
   Full interface: [docs/CONTRACTS.md](docs/CONTRACTS.md).
 - **Database:** apply `supabase/migrations` in order (Supabase MCP, `supabase db push`, or the SQL editor) and
   configure Auth as described in [supabase/README.md](supabase/README.md).
-- **Web:** any Node host (Vercel, Fly, Render, or a VPS). Set every variable from `.env.example` in the host's
-  environment; `NEXT_PUBLIC_*` values are baked in at build time, so rebuild after changing them.
+- **Web:** Render free web service ([`render.yaml`](render.yaml)) or Netlify's Next.js runtime
+  ([`netlify.toml`](netlify.toml)). The app is one Node server, so Cloudflare Pages is not the target.
+  Database is hosted Supabase (Auth + RLS + Storage), not a bare Postgres URL. Exact steps and every
+  env var: [SETUP.md](SETUP.md). `NEXT_PUBLIC_*` values are baked in at build time, so redeploy after changing them.
 
 ## Security
 
