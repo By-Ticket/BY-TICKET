@@ -1,5 +1,6 @@
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
+import { MOCK_USDC } from "@/lib/stellar/usdc";
 import { Sep24RampAdapter, anchorOffersAsset, assetEnabled, parseSep24Webhook, type Sep24Info } from "./sep24";
 import { mapSep24Status } from "./status";
 import type { AnchorToml } from "./toml";
@@ -34,7 +35,7 @@ describe("SEP-24 adapter (mocked fetch)", () => {
     expect(
       anchorOffersAsset(info, withIssuer, "deposit", {
         code: "USDC",
-        issuer: "GB4RGUGQOUHQXDYV4YJGKXYT7WF5HLCMBSSYDCWHFJ5QAOZ2KYYYXLHG",
+        issuer: MOCK_USDC.issuer,
       }),
     ).toBe(false);
   });

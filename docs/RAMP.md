@@ -1,8 +1,10 @@
 # Fiat on/off-ramp (SEP-24) and KYC (SEP-12)
 
 Fans can pay for tickets in local currency through a Stellar Anchor. Organizers can cash out USDC
-after `release_payout` to the same anchor. Contracts are unchanged: they still settle in the mock
-USDC token on testnet. Identity checks use SEP-12 against that anchor before a deposit or cash-out.
+after `release_payout` to the same anchor. Settlement is Circle's official USDC (testnet issuer
+`GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`, mainnet
+`GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`). Mock USDC is local/tests only
+(`USDC_MODE=mock`). Identity checks use SEP-12 against the anchor before a deposit or cash-out.
 
 ## Providers
 
@@ -20,7 +22,7 @@ Set these in `apps/web/.env.local` (see `apps/web/.env.example`).
 
 | Variable | Required | Notes |
 |---|---|---|
-| `RAMP_PROVIDER` | no | `stub` or `sep24`. Default `stub`. |
+| `RAMP_PROVIDER` | production: `sep24` | Local/tests: `stub` (default in code). |
 | `ANCHOR_HOME_DOMAIN` | for `sep24` | Host only, no scheme. Defaults to `testanchor.stellar.org` on testnet. |
 | `KYC_THRESHOLD_AMOUNT` | no | USDC amount below which fan deposits may skip KYC if the anchor allows it. Default `0` (always check). Cash-out is never skipped. |
 | `ANCHOR_CALLBACK_SECRET` | for live callbacks | Shared secret or HMAC key. `POST /api/ramp/callbacks` rejects unsigned requests. |
@@ -48,8 +50,8 @@ The app fetches `https://<ANCHOR_HOME_DOMAIN>/.well-known/stellar.toml` and read
 
 If `GET /info` does not list the ticket asset code **and issuer** (`NEXT_PUBLIC_USDC_ASSET_CODE` /
 `NEXT_PUBLIC_USDC_ISSUER`), the UI explains that this anchor cannot take that asset. SDF's test
-anchor lists Circle testnet USDC, not BY Tickets' mock USDC, so that message is expected until a
-matching asset or a local test anchor is used.
+anchor lists Circle testnet USDC, which matches the production issuer. Local mock USDC will not
+appear on that anchor — use `RAMP_PROVIDER=stub` or a local test anchor.
 
 ## KYC (SEP-12)
 

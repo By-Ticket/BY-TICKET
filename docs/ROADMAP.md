@@ -7,7 +7,7 @@
 | 1 | Scaffold, folder structure, env setup, README | ✅ done |
 | 2 | Soroban contracts + tests + testnet deploy | ✅ done |
 | 3 | Database schema (Supabase + RLS) + auth | ✅ done (migrations to be applied to the Supabase project) |
-| 4 | Wallet connection (Freighter + custodial) + ticket purchase | ⏳ wallet login + checkout built; a buy needs test USDC from the token issuer |
+| 4 | Wallet connection (Freighter + custodial) + ticket purchase | ⏳ wallet login + checkout built; a buy needs Circle testnet USDC |
 | 5 | My Tickets, rotating signed QR, offline scanner check-in | ⬜ |
 | 6 | Organizer dashboard (events, tiers, analytics, payouts, rules) | ⏳ create / complete / cancel / release / milestone + cash-out wired; analytics still later |
 | 7 | Rewards (BY Points) + proof-of-attendance badges | ⬜ |
@@ -19,7 +19,8 @@
 - Security audit of the three contracts; freeze interfaces, enable an upgrade path behind admin multisig.
 - Move platform/admin keys to a KMS/HSM (AWS KMS, GCP KMS or HashiCorp Vault) and multisig (Stellar
   native thresholds) for the admin account; key rotation runbook.
-- Switch `NEXT_PUBLIC_STELLAR_NETWORK=public`, mainnet RPC provider with SLA, Circle mainnet USDC.
+- Switch `NEXT_PUBLIC_STELLAR_NETWORK=public`, mainnet RPC provider with SLA, Circle mainnet USDC
+  (issuer `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`).
 - Monitoring: contract event indexer health, failed-tx alerts, fee-sponsor balance alerts.
 - Legal: terms, refund policy, data protection (Zambia Data Protection Act 2021).
 

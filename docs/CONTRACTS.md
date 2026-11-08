@@ -175,10 +175,11 @@ Contract tooling runs on the host (see README). No Docker:
 npm run contracts:test     # cargo test (64 tests)
 npm run contracts:lint     # rustfmt --check + clippy -D warnings
 npm run contracts:build    # stellar contract build → target/wasm32v1-none/release/*.wasm
-npm run contracts:deploy   # deploy all three + mock USDC to testnet, write IDs to apps/web/.env.local
+npm run contracts:deploy   # deploy all three against Circle testnet USDC; write IDs to apps/web/.env.local
 npm run contracts:smoke    # end-to-end purchase → check-in → points/badge on testnet
 ```
 
-Deploy options (env vars): `USDC_MODE=mock|circle` (default `mock`: a test `USDC`
-asset the deployer can mint; `circle` uses Circle's testnet USDC), `FEE_BPS`, `PURCHASE_POINTS_PER_UNIT`,
+Deploy options (env vars): `USDC_MODE=circle|mock` (default `circle`: Circle's official
+testnet USDC issuer `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`; `mock` is a
+local-only issuer the deployer can mint), `FEE_BPS`, `PURCHASE_POINTS_PER_UNIT`,
 `ATTENDANCE_POINTS`, `ORGANIZER=G…` (approve an organizer right after deploying).

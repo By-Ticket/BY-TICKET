@@ -1,4 +1,11 @@
 import { publicEnv } from "@/lib/env";
+import { resolvedUsdc } from "./usdc";
+
+const usdc = resolvedUsdc(
+  publicEnv.NEXT_PUBLIC_STELLAR_NETWORK,
+  publicEnv.NEXT_PUBLIC_USDC_ISSUER,
+  publicEnv.NEXT_PUBLIC_USDC_CONTRACT_ID,
+);
 
 /** Network + contract configuration shared by browser and server code. */
 export const stellarConfig = {
@@ -13,9 +20,9 @@ export const stellarConfig = {
     badge: publicEnv.NEXT_PUBLIC_BADGE_CONTRACT_ID,
   },
   usdc: {
-    code: publicEnv.NEXT_PUBLIC_USDC_ASSET_CODE,
-    issuer: publicEnv.NEXT_PUBLIC_USDC_ISSUER,
-    contractId: publicEnv.NEXT_PUBLIC_USDC_CONTRACT_ID,
+    code: publicEnv.NEXT_PUBLIC_USDC_ASSET_CODE || usdc.code,
+    issuer: usdc.issuer,
+    contractId: usdc.contractId,
   },
 } as const;
 

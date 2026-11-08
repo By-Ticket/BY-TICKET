@@ -1,0 +1,13 @@
+{
+  "note": "Circle official Stellar USDC. Production and hosted testnet use these issuers. Mock USDC is only for USDC_MODE=mock local deploys and tests.",
+  "testnet": {
+    "code": "USDC",
+    "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    "contractId": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+  },
+  "public": {
+    "code": "USDC",
+    "issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+    "contractId": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75"
+  }
+}
