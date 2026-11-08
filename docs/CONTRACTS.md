@@ -1,7 +1,9 @@
 # Contract Specifications
 
-> **Status:** implemented, tested (53 unit/integration tests) and deployed to Stellar **testnet** (Phase 2).
-> Source: [`contracts/`](../contracts). Deployment record: [`contracts/deployments/testnet.json`](../contracts/deployments/testnet.json).
+> **Status:** implemented, tested (64 unit/integration tests) and deployed to Stellar **testnet** (Phase 2).
+> `event_ticket` **v2** adds escrow, milestone payout, refunds and resale royalties. Redeploy is required
+> before those functions exist on-chain. Source: [`contracts/`](../contracts).
+> Deployment record: [`contracts/deployments/testnet.json`](../contracts/deployments/testnet.json).
 
 All amounts are `i128` in the token's smallest unit (USDC and BY Points both use 7 decimals, so `1 USDC = 10_000_000`).
 Every state-changing call requires `require_auth()` from the acting address and emits a contract event.
@@ -24,7 +26,7 @@ support `upgrade(wasm_hash)` / `set_admin(new_admin)` (admin only) and `version(
 | Role | Granted by | Can |
 |---|---|---|
 | `admin` | `__constructor` | set platform fee + treasury, reward rates, approve/revoke organizers, pause, upgrade, set minters, manage perks |
-| `organizer` | admin: `approve_organizer` | create events, add tiers, change capacity/transfer rules/sales, enable/disable scanners for **own** events |
+| `organizer` | admin: `approve_organizer` | create events, add tiers, change capacity/transfer rules/sales, enable/disable scanners, complete/cancel events, release escrow, set payout milestones for **own** events |
 | `scanner` | event organizer: `set_scanner` | `validate_and_check_in` for that event only (the organizer can always check in too) |
 | `minter` | admin: `set_minter` on `rewards` / `attendance_badge` | mint points / badges; the `event_ticket` contract is the minter |
 | perk sponsor | admin: `set_perk(…, sponsor, …)` | toggle its own perk on/off |
@@ -45,31 +47,47 @@ support `upgrade(wasm_hash)` / `set_admin(new_admin)` (admin only) and `version(
 
 | Function | Notes |
 |---|---|
-| `create_event(organizer, capacity, price, max_transfers, resale_cap, splits, metadata_hash) -> u64` | creates tier `0` at `price`; `splits`: 1–5 `{recipient, bps}` summing to exactly 10 000; `metadata_hash`: sha256 of the off-chain event record |
-| `add_tier(event_id, price, capacity) -> u32` | up to 10 tiers; tier capacity ≤ event capacity |
-| `update_event(event_id, capacity, max_transfers, resale_cap, sales_open)` | capacity can't drop below tickets sold |
+| `create_event(organizer, capacity, price, max_transfers, resale_cap, splits, metadata_hash, ends_at, royalty_bps) -> u64` | creates tier `0` at `price`; `splits`: 1–5 `{recipient, bps}` summing to exactly 10 000; `metadata_hash`: sha256 of the off-chain event record; `ends_at` unix time (0 = completable immediately); `royalty_bps` ≤ 1500 (15 %) |
+| `add_tier(event_id, price, capacity) -> u32` | up to 10 tiers; tier capacity ≤ event capacity; event must be Live |
+| `update_event(event_id, capacity, max_transfers, resale_cap, sales_open)` | capacity can't drop below tickets sold; event must be Live |
 | `set_scanner(event_id, scanner, enabled)` | |
+| `set_payout_milestone(caller, event_id, min_checkins, partial_release_bps)` | organizer or admin; optional partial escrow release while Live once `checked_in ≥ min_checkins` |
+| `complete_event(caller, event_id)` | organizer or admin; requires ledger time ≥ `ends_at`; closes sales; unlocks full `release_payout` |
+| `cancel_event(caller, event_id)` | organizer or admin; Live only, and only if no escrow has been released; holders then `claim_refund` |
+| `release_payout(caller, event_id) -> i128` | organizer or admin; pays remaining escrow to `splits` after completion, or the configured partial share after the check-in milestone; blocked if cancelled |
 
 ### Customers and the door
 
 | Function | Auth | Notes |
 |---|---|---|
-| `mint_ticket(payer, owner, event_id, tier) -> u64` | payer | checks not paused, sales open, event capacity **and** tier capacity (no oversell); pulls the price from `payer` and pays fee + splits in one transaction; mints purchase points to `owner`. `payer ≠ owner` lets the platform pay after a mobile-money on-ramp |
-| `transfer_ticket(ticket_id, from, to, price)` | from (+ `to` if `price > 0`) | rejects used tickets, `transfers ≥ max_transfers`, `price > resale_cap`, self-transfer. With `price > 0` the buyer pays the seller atomically, so the cap is enforced on the real payment |
-| `validate_and_check_in(ticket_id, scanner) -> u64` | scanner | organizer or enabled scanner; marks used (any replay → `AlreadyCheckedIn`); mints attendance points and the badge to the owner; returns the badge id |
+| `mint_ticket(payer, owner, event_id, tier) -> u64` | payer | checks not paused, Live, sales open, event capacity **and** tier capacity (no oversell); platform fee goes to the treasury immediately; organizer share is escrowed in the contract; mints purchase points to `owner`. `payer ≠ owner` lets the platform pay after a mobile-money on-ramp |
+| `transfer_ticket(ticket_id, from, to, price)` | from (+ `to` if `price > 0`) | rejects used/refunded tickets, `transfers ≥ max_transfers`, `price > resale_cap`, self-transfer, cancelled/completed events. With `price > 0` the buyer pays fee → treasury, royalty → `splits`, remainder → seller |
+| `claim_refund(owner, ticket_id) -> i128` | owner | after `cancel_event`, returns the escrowed organizer-share of that ticket's purchase price (platform fee stays with the treasury) |
+| `validate_and_check_in(ticket_id, scanner) -> u64` | scanner | organizer or enabled scanner; marks used (any replay → `AlreadyCheckedIn`); blocked if cancelled; mints attendance points and the badge to the owner; returns the badge id |
 
 ### Views
 
 `get_event(id) -> EventInfo`, `get_ticket(id) -> Ticket`, `is_organizer(addr)`, `is_scanner(event_id, addr)`,
-`config() -> Config`, `paused()`, `quote_split(event_id, price) -> (fee, Vec<amount>)`.
+`config() -> Config`, `paused()`, `quote_split(event_id, price) -> (fee, Vec<amount>)`,
+`escrow_balance(event_id) -> i128`, `event_status(event_id) -> EventStatus` (`Live` / `Completed` / `Cancelled`),
+`version() -> u32` (currently **2**).
 There is deliberately no `tickets_of(owner)`: per-owner lists grow without bound in contract storage, so
 "My Tickets" is served by the off-chain indexer (Supabase) built from contract events (see DECISIONS D-017).
 
-### Revenue split
+### Escrow, payouts, refunds
 
-`fee = price × fee_bps / 10 000` goes to the treasury; the remainder is split by `bps`, with rounding dust going
-to the last recipient so the payouts always sum to exactly `price`. Example (verified on testnet): 100 USDC,
-fee 250 bps, splits 70/30 gives treasury 2.5, organizer 68.25, artist 29.25.
+Primary sales pay `fee = price × fee_bps / 10 000` to the treasury immediately. The remainder is transferred
+into the contract and tracked per event (`escrow_balance`). Organizer/admin call `complete_event` after
+`ends_at`, then `release_payout` which splits the remaining escrow by `event.splits` (rounding dust to the
+last recipient). Optional `set_payout_milestone` lets a percentage of escrow go out while the event is still
+Live once enough attendees have checked in. `cancel_event` blocks payouts; each holder `claim_refund`s their
+escrowed `paid` amount. Example: 100 USDC, fee 250 bps, splits 70/30 → treasury 2.5 at purchase; 97.5 in
+escrow; after completion organizer 68.25, artist 29.25.
+
+### Resale royalty
+
+On `transfer_ticket` with `price > 0`: platform fee (`fee_bps`) → treasury, organizer royalty (`royalty_bps`,
+max 15 %) → `splits`, remainder → seller. `max_transfers` and `resale_cap` are unchanged.
 
 ### Events (topics → data)
 
@@ -79,7 +97,11 @@ fee 250 bps, splits 70/30 gives treasury 2.5, organizer 68.25, artist 29.25.
 | `event_updated(event_id)` | `update_event` |
 | `tier_added(event_id)` | `add_tier` |
 | `ticket_minted(event_id, owner)` → ticket_id, tier, price, payer, platform_fee | `mint_ticket` |
+| `escrowed(event_id)` → amount, payer | `mint_ticket` (organizer share) |
 | `ticket_transferred(ticket_id, from, to)` → price, transfers | `transfer_ticket` |
+| `royalty_paid(event_id, ticket_id)` → amount | priced `transfer_ticket` when `royalty_bps > 0` |
+| `released(event_id)` → amount, remaining, partial | `release_payout` |
+| `refunded(event_id, ticket_id)` → owner, amount | `claim_refund` |
 | `checked_in(event_id, ticket_id)` → owner, scanner, badge_id | `validate_and_check_in` |
 | `scanner_set`, `organizer_set`, `config_updated`, `paused_set` | admin / organizer setters |
 
@@ -97,6 +119,11 @@ fee 250 bps, splits 70/30 gives treasury 2.5, organizer 68.25, artist 29.25.
 | 8 | `TierSoldOut` | 18 | `TooManyTiers` |
 | 9 | `SalesClosed` | 19 | `FeeTooHigh` |
 | 10 | `NotOwner` | 20 | `Paused` |
+| 21 | `RoyaltyTooHigh` | 26 | `AlreadyReleased` |
+| 22 | `EventNotLive` | 27 | `AlreadyRefunded` |
+| 23 | `EventNotCompleted` | 28 | `NothingToRelease` |
+| 24 | `EventCancelled` | 29 | `MilestoneNotMet` |
+| 25 | `TooEarly` | 30 | `EventNotCancelled` |
 
 ## `rewards` (BY Points, SEP-41)
 
@@ -145,7 +172,7 @@ fail with `NonTransferable` until the admin calls `set_transferable(true)`. Burn
 Contract tooling runs on the host (see README). No Docker:
 
 ```bash
-npm run contracts:test     # cargo test (53 tests)
+npm run contracts:test     # cargo test (64 tests)
 npm run contracts:lint     # rustfmt --check + clippy -D warnings
 npm run contracts:build    # stellar contract build → target/wasm32v1-none/release/*.wasm
 npm run contracts:deploy   # deploy all three + mock USDC to testnet, write IDs to apps/web/.env.local

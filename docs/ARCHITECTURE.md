@@ -51,7 +51,7 @@ flowchart LR
   RPC --> ET
   ET -- mint on purchase / attendance --> RW
   ET -- mint after check-in --> BG
-  ET -- payment & revenue split --> USDC
+  ET -- fee now, escrow until complete --> USDC
   IDX -- getEvents --> RPC
   IDX --> DB
 ```

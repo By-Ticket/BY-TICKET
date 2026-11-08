@@ -6,7 +6,8 @@ Blockchain-powered event ticketing and rewards on the [Stellar](https://stellar.
 organizers, artists, promoters, venues and community events in Zambia and across Africa. Mobile-first PWA,
 friendly to low-bandwidth connections.
 
-- **Organizers** list events, sell tickets, set transfer/resale rules, split revenue, scan at the door.
+- **Organizers** list events, sell tickets, set transfer/resale rules, hold proceeds in escrow until the event
+  completes, split revenue (including resale royalties), scan at the door.
 - **Customers** discover events, buy with a Stellar wallet *or* just an email, earn BY Points, collect badges.
 - **Tickets** are verifiable on-chain; check-in is single-use; QR codes rotate and can't be screenshotted.
 
@@ -34,7 +35,7 @@ friendly to low-bandwidth connections.
 │       └── lib/              env, stellar/, supabase/, payments/, security/
 ├── contracts/                Soroban Cargo workspace (host Rust + Stellar CLI)
 │   ├── Dockerfile            unused; do not build contracts in Docker
-│   ├── event_ticket/         events, tiers, tickets, transfers, check-in, revenue split
+│   ├── event_ticket/         events, tickets, escrow payouts, refunds, resale royalties, check-in
 │   ├── rewards/              BY Points (SEP-41 token) + perks
 │   ├── attendance_badge/     proof-of-attendance badges
 │   └── deployments/          testnet.json (deployed contract IDs + wasm hashes)

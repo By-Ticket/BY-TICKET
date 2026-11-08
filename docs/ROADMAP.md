@@ -30,8 +30,9 @@
 - Reconciliation jobs, webhook signature verification, idempotent settlement.
 
 ### Secondary marketplace
-- Organizer-controlled resale: price caps (already enforced on-chain), royalties to organizer/artist on
-  each resale, escrowed USDC settlement, anti-scalping limits per account.
+- Organizer-controlled resale: price caps, royalties to organizer/artist, and primary-sale escrow are now
+  enforced on-chain (`event_ticket` v2). Remaining: a customer-facing resale UI, anti-scalping limits per
+  account, and indexer support for `escrowed` / `released` / `refunded` / `royalty_paid`.
 
 ### Sponsor & vendor perks
 - Vendors (food, drinks, merch) register perks redeemable with BY Points at the venue.
