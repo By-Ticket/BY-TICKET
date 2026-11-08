@@ -15,6 +15,9 @@ import {
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { InteractiveRamp } from "@/components/payments/interactive-ramp";
+import { KycForm } from "@/components/payments/kyc-form";
+import type { KycField } from "@/lib/payments/kyc-status";
+import { finishSep10Kyc, type KycActionResult } from "@/app/kyc/actions";
 
 interface WalletChoice {
   id: string;
@@ -27,11 +30,13 @@ export function BuyPanel({
   tierId,
   wallets,
   soldOut,
+  amountUsdc,
 }: {
   eventId: string;
   tierId: string;
   wallets: WalletChoice[];
   soldOut: boolean;
+  amountUsdc: number;
 }) {
   const router = useRouter();
   const [walletId, setWalletId] = useState(wallets.find((wallet) => wallet.kind === "freighter")?.id ?? wallets[0]?.id ?? "");
@@ -40,6 +45,7 @@ export function BuyPanel({
   const [error, setError] = useState<string | null>(null);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [ramp, setRamp] = useState<{ orderId: string; rampId: string; url: string; status: string; message: string } | null>(null);
+  const [kyc, setKyc] = useState<{ message: string; fields: KycField[]; pending?: boolean } | null>(null);
   const selected = wallets.find((wallet) => wallet.id === walletId);
 
   const finish = (step: CheckoutResult) => {
@@ -53,6 +59,16 @@ export function BuyPanel({
       setRamp(null);
       toast.success("Ticket purchased");
       router.refresh();
+      return false;
+    }
+    if (step.step === "kyc") {
+      setKyc({ message: step.message, fields: step.fields });
+      setRamp(null);
+      return false;
+    }
+    if (step.step === "kyc_pending") {
+      setKyc({ message: step.message, fields: [], pending: true });
+      setRamp(null);
       return false;
     }
     if (step.step === "ramp") {
@@ -153,7 +169,40 @@ export function BuyPanel({
           </label>
         ))}
       </fieldset>
-      {ramp ? (
+      {kyc?.pending ? (
+        <div className="space-y-3 rounded-xl border p-4">
+          <p className="text-muted-foreground text-sm">{kyc.message}</p>
+          <Button type="button" variant="outline" disabled={pending} onClick={() => { setKyc(null); run("local_currency"); }} className="h-10 px-4">
+            Check again
+          </Button>
+        </div>
+      ) : kyc ? (
+        <KycForm
+          walletId={selected?.id ?? walletId}
+          kind="deposit"
+          amountUsdc={amountUsdc}
+          message={kyc.message}
+          fields={kyc.fields}
+          onResult={async (result: KycActionResult) => {
+            let next = result;
+            if (next.ok && next.step === "sep10") {
+              const signedXdr = await signStellarTransaction(next.challengeXdr, next.address);
+              next = await finishSep10Kyc({ walletId: selected!.id, signedXdr, kind: "deposit", amountUsdc });
+            }
+            if (!next.ok) {
+              setError(next.error);
+              return;
+            }
+            if (next.step === "ready") {
+              setKyc(null);
+              run("local_currency");
+              return;
+            }
+            if (next.step === "kyc_pending") setKyc({ message: next.message, fields: [], pending: true });
+            if (next.step === "kyc") setKyc({ message: next.message, fields: next.fields });
+          }}
+        />
+      ) : ramp ? (
         <InteractiveRamp url={ramp.url} status={ramp.status} message={ramp.message} onCancel={() => setRamp(null)} />
       ) : (
         <div className="flex flex-wrap gap-2">

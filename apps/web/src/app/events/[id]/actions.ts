@@ -7,6 +7,8 @@ import { custodialKeypair } from "@/lib/custodial/keys";
 import { usdcUnitsToZmw } from "@/lib/payments/pricing";
 import { unitsToAmountString } from "@/lib/payments/format";
 import { createRampAdapter, rampProvider } from "@/lib/payments/ramp";
+import { refreshKyc } from "@/lib/payments/kyc-flow";
+import type { KycField } from "@/lib/payments/kyc-status";
 import { completeSep10ForWallet, ensureAnchorOffers, ensureSep10, insertRampTx, loadRampTx, persistStatus, updateRampTx } from "@/lib/payments/ramp-flow";
 import { isTerminalRampStatus, rampStatusMessage } from "@/lib/payments/status";
 import { limitAction } from "@/lib/security/action-guard";
@@ -32,6 +34,8 @@ export type CheckoutResult =
   | { ok: true; step: "trustline"; orderId: string; xdr: string; address: string }
   | { ok: true; step: "sign"; orderId: string; xdr: string; address: string }
   | { ok: true; step: "sep10"; orderId: string; challengeXdr: string; address: string; homeDomain: string }
+  | { ok: true; step: "kyc"; orderId: string; status: string; message: string; fields: KycField[] }
+  | { ok: true; step: "kyc_pending"; orderId: string; message: string }
   | { ok: true; step: "ramp"; orderId: string; rampId: string; url: string; status: string; message: string }
   | { ok: true; step: "done"; orderId: string; chainTicketId: string }
   | { ok: false; error: string };
@@ -356,6 +360,22 @@ async function startLocalCurrency(input: {
       address: auth.address,
       homeDomain: auth.homeDomain,
     };
+  }
+
+  const amountUsdc = Number(unitsToAmountString(input.price));
+  const gate = await refreshKyc({
+    userId: input.viewerId,
+    account: input.wallet.public_key,
+    jwt: auth.jwt,
+    kind: "deposit",
+    amountUsdc,
+  });
+  if (gate.action === "block") return { ok: false, error: gate.message };
+  if (gate.action === "pending") {
+    return { ok: true, step: "kyc_pending", orderId: input.orderId, message: gate.message };
+  }
+  if (gate.action === "form") {
+    return { ok: true, step: "kyc", orderId: input.orderId, status: gate.status, message: gate.message, fields: gate.fields };
   }
 
   const adapter = await createRampAdapter(rampProvider(), auth.jwt);

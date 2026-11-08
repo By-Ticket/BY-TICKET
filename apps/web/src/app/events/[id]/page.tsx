@@ -107,6 +107,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           eventId={event.id}
           tierId={tier.id}
           soldOut={soldOut}
+          amountUsdc={Number(tier.price_units) / 10_000_000}
           wallets={(wallets ?? []).map((wallet) => ({
             id: wallet.id,
             kind: wallet.kind,

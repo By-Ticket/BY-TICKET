@@ -12,6 +12,7 @@ function tomlFor(server: Keypair): AnchorToml {
     signingKey: server.publicKey(),
     webAuthEndpoint: `https://${webAuthHost}/auth`,
     transferServerSep24: `https://${webAuthHost}/sep24`,
+    kycServer: `https://${webAuthHost}/sep12`,
     networkPassphrase: Networks.TESTNET,
     currencies: [],
   };

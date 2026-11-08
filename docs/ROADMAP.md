@@ -24,8 +24,9 @@
 - Legal: terms, refund policy, data protection (Zambia Data Protection Act 2021).
 
 ### Mobile money on/off-ramp
-- SEP-24 Stellar Anchor is live (`Sep24RampAdapter`, `RAMP_PROVIDER=sep24`). Remaining: a Zambian
-  production anchor that lists our USDC and the MTN / Airtel / Zamtel rails (kept as provider metadata).
+- SEP-24 Stellar Anchor is live (`Sep24RampAdapter`, `RAMP_PROVIDER=sep24`). SEP-12 KYC gates deposits
+  and organizer cash-out. Remaining: a Zambian production anchor that lists our USDC and the MTN /
+  Airtel / Zamtel rails (kept as provider metadata).
 - On-ramp: customer pays fiat in the anchor widget → USDC lands → ticket minted.
 - Off-ramp: organizer cash-out after `release_payout` via `/transactions/withdraw/interactive`.
 - Reconciliation jobs, webhook signature verification, idempotent settlement.

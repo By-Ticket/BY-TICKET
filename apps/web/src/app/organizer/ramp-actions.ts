@@ -4,6 +4,8 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
 import { custodialKeypair } from "@/lib/custodial/keys";
 import { createRampAdapter, rampProvider } from "@/lib/payments/ramp";
+import { refreshKyc } from "@/lib/payments/kyc-flow";
+import type { KycField } from "@/lib/payments/kyc-status";
 import { completeSep10ForWallet, ensureAnchorOffers, ensureSep10, insertRampTx, loadRampTx, persistStatus, updateRampTx } from "@/lib/payments/ramp-flow";
 import { isTerminalRampStatus, rampStatusMessage } from "@/lib/payments/status";
 import { limitAction } from "@/lib/security/action-guard";
@@ -14,6 +16,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 export type CashOutResult =
   | { ok: true; step: "sep10"; rampId?: string; challengeXdr: string; address: string; homeDomain: string }
+  | { ok: true; step: "kyc"; status: string; message: string; fields: KycField[] }
+  | { ok: true; step: "kyc_pending"; message: string }
   | { ok: true; step: "ramp"; rampId: string; url: string; status: string; message: string }
   | { ok: true; step: "pay"; rampId: string; xdr: string; address: string; message: string }
   | { ok: true; step: "done"; rampId: string; message: string }
@@ -50,6 +54,19 @@ export async function beginCashOut(input: z.infer<typeof beginSchema>): Promise<
     const auth = await ensureSep10(wallet);
     if ("step" in auth) {
       return { ok: true, step: "sep10", challengeXdr: auth.challengeXdr, address: auth.address, homeDomain: auth.homeDomain };
+    }
+
+    const gate = await refreshKyc({
+      userId: viewer.id,
+      account: wallet.public_key,
+      jwt: auth.jwt,
+      kind: "withdraw",
+      amountUsdc: Number(parsed.data.amountUsdc),
+    });
+    if (gate.action === "block") return { ok: false, error: gate.message };
+    if (gate.action === "pending") return { ok: true, step: "kyc_pending", message: gate.message };
+    if (gate.action === "form") {
+      return { ok: true, step: "kyc", status: gate.status, message: gate.message, fields: gate.fields };
     }
 
     const adapter = await createRampAdapter(rampProvider(), auth.jwt);

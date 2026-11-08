@@ -15,7 +15,10 @@ export default async function OrganizerPage() {
   const { data: org } = await supabase.rpc("my_organizer").maybeSingle();
 
   if (org?.status === "approved") {
-    const { data: wallets } = await supabase.from("wallets").select("id, kind, public_key").order("created_at");
+    const [{ data: wallets }, { data: kyc }] = await Promise.all([
+      supabase.from("wallets").select("id, kind, public_key").order("created_at"),
+      supabase.from("kyc_customers").select("status").eq("user_id", viewer.id).maybeSingle(),
+    ]);
     return (
       <>
         <PhasePlaceholder
@@ -40,13 +43,14 @@ export default async function OrganizerPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CashOutPanel
-                wallets={(wallets ?? []).map((wallet) => ({
-                  id: wallet.id,
-                  kind: wallet.kind,
-                  publicKey: wallet.public_key,
-                }))}
-              />
+            <CashOutPanel
+              kycStatus={kyc?.status}
+              wallets={(wallets ?? []).map((wallet) => ({
+                id: wallet.id,
+                kind: wallet.kind,
+                publicKey: wallet.public_key,
+              }))}
+            />
             </CardContent>
           </Card>
         </div>

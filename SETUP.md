@@ -174,7 +174,10 @@ Generate secrets once on your machine (`npm run secrets`) and paste them into th
 | `NEXT_PUBLIC_QR_ROTATION_SECONDS` | No | Default `20`. |
 | `NEXT_PUBLIC_ZMW_PER_USDC` | No | Default `26.5`. |
 | `PLATFORM_FEE_BPS` | No | Default `250`. |
-| `PAYMENT_RAMP_PROVIDER` | No | Leave `stub`. |
+| `RAMP_PROVIDER` | No | `stub` (default) or `sep24`. `PAYMENT_RAMP_PROVIDER` is a deprecated alias. |
+| `ANCHOR_HOME_DOMAIN` | For `sep24` | Host only. Defaults to `testanchor.stellar.org` on testnet. |
+| `KYC_THRESHOLD_AMOUNT` | No | USDC amount below which fan deposits may skip KYC. Default `0`. |
+| `ANCHOR_CALLBACK_SECRET` | For live KYC callbacks | Shared secret or HMAC key. Server only. |
 | `UPSTASH_REDIS_REST_URL` | No | Empty uses the in-memory limiter. |
 | `UPSTASH_REDIS_REST_TOKEN` | No | Pair with the URL. |
 | `ADMIN_EMAILS` | No | Comma-separated. Those addresses become admins on first sign-in. |

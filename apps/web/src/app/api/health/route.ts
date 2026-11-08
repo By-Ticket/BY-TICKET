@@ -60,6 +60,8 @@ export async function GET(request: Request) {
       custodialKeys: Boolean(serverEnv.CUSTODIAL_KEY_ENCRYPTION_KEY),
       paymentRamp: serverEnv.RAMP_PROVIDER,
       anchorHomeDomain: Boolean(serverEnv.ANCHOR_HOME_DOMAIN) || serverEnv.RAMP_PROVIDER === "sep24",
+      kycCallback: Boolean(serverEnv.ANCHOR_CALLBACK_SECRET),
+      kycThreshold: serverEnv.KYC_THRESHOLD_AMOUNT,
     },
   });
 }

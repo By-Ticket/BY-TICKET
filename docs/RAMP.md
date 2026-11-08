@@ -1,8 +1,8 @@
-# Fiat on/off-ramp (SEP-24)
+# Fiat on/off-ramp (SEP-24) and KYC (SEP-12)
 
 Fans can pay for tickets in local currency through a Stellar Anchor. Organizers can cash out USDC
 after `release_payout` to the same anchor. Contracts are unchanged: they still settle in the mock
-USDC token on testnet.
+USDC token on testnet. Identity checks use SEP-12 against that anchor before a deposit or cash-out.
 
 ## Providers
 
@@ -22,12 +22,15 @@ Set these in `apps/web/.env.local` (see `apps/web/.env.example`).
 |---|---|---|
 | `RAMP_PROVIDER` | no | `stub` or `sep24`. Default `stub`. |
 | `ANCHOR_HOME_DOMAIN` | for `sep24` | Host only, no scheme. Defaults to `testanchor.stellar.org` on testnet. |
+| `KYC_THRESHOLD_AMOUNT` | no | USDC amount below which fan deposits may skip KYC if the anchor allows it. Default `0` (always check). Cash-out is never skipped. |
+| `ANCHOR_CALLBACK_SECRET` | for live callbacks | Shared secret or HMAC key. `POST /api/ramp/callbacks` rejects unsigned requests. |
 
 The app fetches `https://<ANCHOR_HOME_DOMAIN>/.well-known/stellar.toml` and reads:
 
 - `TRANSFER_SERVER_SEP0024`
 - `WEB_AUTH_ENDPOINT`
 - `SIGNING_KEY`
+- `KYC_SERVER` (falls back to `TRANSFER_SERVER`, then the SEP-24 transfer server)
 
 ## Flows
 
@@ -48,10 +51,30 @@ If `GET /info` does not list the ticket asset code **and issuer** (`NEXT_PUBLIC_
 anchor lists Circle testnet USDC, not BY Tickets' mock USDC, so that message is expected until a
 matching asset or a local test anchor is used.
 
+## KYC (SEP-12)
+
+1. Reuse the SEP-10 JWT (`by_sep10` cookie).
+2. `GET /customer` on `KYC_SERVER`. Map `ACCEPTED`, `PROCESSING`, `NEEDS_INFO`, `REJECTED`.
+3. **Pay with local currency:** if `NEEDS_INFO`, show a form built from the fields the anchor asked
+   for (files go to the anchor, never into our database). If `PROCESSING`, show a pending state. If
+   `REJECTED`, block the purchase. Amounts below `KYC_THRESHOLD_AMOUNT` may proceed without KYC when
+   the status is not rejected.
+4. **Organizer cash-out:** blocked until status is `ACCEPTED`. The organizer dashboard shows the
+   current status.
+5. After a successful GET, the app registers `PUT /customer/callback` pointing at
+   `NEXT_PUBLIC_APP_URL/api/ramp/callbacks` when the anchor supports it. The same route also accepts
+   transaction status updates.
+6. `RAMP_PROVIDER=stub` writes `accepted` and skips the live anchor, so local checkout and tests
+   still work.
+
 ## Database
 
 `ramp_transactions` (migration `20261108144750_ramp_transactions.sql`): `id`, `user_id`, `kind`
 (`deposit`/`withdraw`), `amount`, `asset_code`, `anchor_tx_id`, `status`, timestamps. RLS lets a
 signed-in user select only their own rows; writes stay on the service role.
+
+`kyc_customers` (migration `20261108153000_kyc_customers.sql`): one row per user (`user_id` PK),
+`status`, `anchor_customer_id`, `fields_needed` (field names/types only), `message`. No document
+bytes. RLS: `select` own row; writes via the service role.
 
 Apply with `npx supabase db push` against the linked project (or the SQL editor).
