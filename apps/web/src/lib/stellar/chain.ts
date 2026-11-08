@@ -27,6 +27,8 @@ export interface OnChainTier {
   sold: number;
 }
 
+export type OnChainEventStatus = "Live" | "Completed" | "Cancelled";
+
 export interface OnChainEvent {
   organizer: string;
   capacity: number;
@@ -35,6 +37,9 @@ export interface OnChainEvent {
   resaleCap: bigint;
   salesOpen: boolean;
   feeBps: number;
+  royaltyBps?: number;
+  endsAt?: bigint;
+  status?: OnChainEventStatus;
   metadataHash: string;
   splits: { recipient: string; bps: number }[];
   tiers: OnChainTier[];
@@ -57,6 +62,8 @@ interface UsdcContract {
 interface TicketContract {
   get_event: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
   get_ticket: (args: { ticket_id: bigint }) => Promise<ContractCall<unknown>>;
+  escrow_balance: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
+  event_status: (args: { event_id: bigint }) => Promise<ContractCall<unknown>>;
   mint_ticket: (
     args: { payer: string; owner: string; event_id: bigint; tier: number },
     opts?: { timeoutInSeconds?: number },
@@ -175,6 +182,9 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
     resale_cap: bigint;
     sales_open: boolean;
     fee_bps: number;
+    royalty_bps?: number;
+    ends_at?: bigint | number;
+    status?: unknown;
     metadata_hash: unknown;
     splits: { recipient: string; bps: number }[];
     tiers: { price: bigint; capacity: number; sold: number }[];
@@ -187,6 +197,9 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
     resaleCap: BigInt(info.resale_cap),
     salesOpen: info.sales_open,
     feeBps: info.fee_bps,
+    royaltyBps: info.royalty_bps,
+    endsAt: info.ends_at === undefined ? undefined : BigInt(info.ends_at),
+    status: parseEventStatus(info.status),
     metadataHash: bytesToHex(info.metadata_hash),
     splits: info.splits.map((split) => ({ recipient: split.recipient, bps: split.bps })),
     tiers: info.tiers.map((tier) => ({
@@ -197,11 +210,40 @@ export async function readOnChainEvent(cfg: ChainConfig, eventId: bigint): Promi
   };
 }
 
+function parseEventStatus(value: unknown): OnChainEventStatus | undefined {
+  if (value === "Live" || value === "Completed" || value === "Cancelled") return value;
+  if (value && typeof value === "object" && "tag" in value) {
+    const tag = (value as { tag: unknown }).tag;
+    if (tag === "Live" || tag === "Completed" || tag === "Cancelled") return tag;
+  }
+  return undefined;
+}
+
+export async function readEscrowBalance(cfg: ChainConfig, eventId: bigint): Promise<bigint> {
+  const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
+  const client = clientFor<TicketContract>(spec, cfg, cfg.ticketContractId);
+  const result = await client.escrow_balance({ event_id: eventId });
+  return BigInt(unwrapResult<bigint | number | string>(result.result));
+}
+
+export async function readEventStatus(cfg: ChainConfig, eventId: bigint): Promise<OnChainEventStatus | undefined> {
+  const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
+  const client = clientFor<TicketContract>(spec, cfg, cfg.ticketContractId);
+  const result = await client.event_status({ event_id: eventId });
+  return parseEventStatus(unwrapResult(result.result));
+}
+
 export async function readOnChainTicket(cfg: ChainConfig, ticketId: bigint) {
   const spec = await specFor(ticketSpecs, cfg, cfg.ticketContractId);
   const client = clientFor<TicketContract>(spec, cfg, cfg.ticketContractId);
   const result = await client.get_ticket({ ticket_id: ticketId });
-  return unwrapResult<{ event_id: bigint; tier: number; owner: string }>(result.result);
+  return unwrapResult<{
+    event_id: bigint;
+    tier: number;
+    owner: string;
+    paid?: bigint;
+    refunded?: boolean;
+  }>(result.result);
 }
 
 /** Create the account (if needed) and add the USDC trustline. Each transaction has one signer. */

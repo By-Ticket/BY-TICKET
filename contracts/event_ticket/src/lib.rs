@@ -8,9 +8,11 @@
 //!   invocation that mints, so concurrent purchases can never exceed capacity.
 //! - **No double entry**: `validate_and_check_in` flips `checked_in` once; replays fail.
 //! - **Controlled transfers**: per-event `max_transfers` and `resale_cap`; priced resales
-//!   settle atomically (buyer pays seller in the same transaction).
-//! - **Revenue split**: every sale pays the platform fee to the treasury and splits the
-//!   rest between the event's recipients (organizer, artist, ...) by basis points.
+//!   settle atomically. The seller receives the price minus the platform fee and any
+//!   organizer royalty.
+//! - **Escrow**: the platform fee is paid to the treasury at purchase; the organizer share
+//!   stays in this contract until `complete_event` + `release_payout` (or a configured
+//!   check-in milestone). Cancelled events refund holders from escrow instead.
 //!
 //! Roles: `admin` (platform), approved `organizer`s, per-event `scanner`s.
 //! Every state change emits an event for the off-chain indexer.
@@ -23,6 +25,8 @@ use soroban_sdk::{
 const BPS_DENOMINATOR: i128 = 10_000;
 /// Hard ceiling for the platform fee (20%), even for the admin.
 pub const MAX_FEE_BPS: u32 = 2_000;
+/// Hard ceiling for the organizer resale royalty (15%).
+pub const MAX_ROYALTY_BPS: u32 = 1_500;
 pub const MAX_SPLITS: u32 = 5;
 pub const MAX_TIERS: u32 = 10;
 /// One whole unit of the payment token (7 decimals), used for points-per-unit math.
@@ -58,6 +62,16 @@ pub enum Error {
     TooManyTiers = 18,
     FeeTooHigh = 19,
     Paused = 20,
+    RoyaltyTooHigh = 21,
+    EventNotLive = 22,
+    EventNotCompleted = 23,
+    EventCancelled = 24,
+    TooEarly = 25,
+    AlreadyReleased = 26,
+    AlreadyRefunded = 27,
+    NothingToRelease = 28,
+    MilestoneNotMet = 29,
+    EventNotCancelled = 30,
 }
 
 // ---- types ----------------------------------------------------------------------
@@ -80,6 +94,14 @@ pub struct Tier {
 }
 
 #[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EventStatus {
+    Live,
+    Completed,
+    Cancelled,
+}
+
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EventInfo {
     pub organizer: Address,
@@ -93,6 +115,17 @@ pub struct EventInfo {
     pub resale_cap: i128,
     /// Platform fee snapshot at creation, so later fee changes don't affect live events.
     pub fee_bps: u32,
+    /// Share of a resale price paid to `splits`. Capped at `MAX_ROYALTY_BPS`.
+    pub royalty_bps: u32,
+    /// Ledger unix time after which the organizer/admin may call `complete_event`. 0 = immediately.
+    pub ends_at: u64,
+    pub status: EventStatus,
+    /// Optional partial payout: check-ins required before `release_payout` while still Live. 0 = off.
+    pub min_checkins_partial: u32,
+    /// Optional partial payout: bps of current escrow released at the milestone. 0 = off.
+    pub partial_release_bps: u32,
+    pub partial_released: bool,
+    pub payout_released: bool,
     pub splits: Vec<Split>,
     pub tiers: Vec<Tier>,
     pub sales_open: bool,
@@ -110,6 +143,9 @@ pub struct Ticket {
     pub checked_in: bool,
     /// Ledger close time of check-in (0 until used).
     pub checked_in_at: u64,
+    /// Organizer-share (post-fee) escrowed at mint, used for refunds.
+    pub paid: i128,
+    pub refunded: bool,
 }
 
 #[contracttype]
@@ -138,6 +174,7 @@ enum DataKey {
     Event(u64),
     Ticket(u64),
     Scanner(u64, Address),
+    Escrow(u64),
 }
 
 // ---- cross-contract interfaces ----------------------------------------------------
@@ -261,6 +298,46 @@ pub struct PausedSet {
     pub paused: bool,
 }
 
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Escrowed {
+    #[topic]
+    pub event_id: u64,
+    pub amount: i128,
+    pub payer: Address,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Released {
+    #[topic]
+    pub event_id: u64,
+    pub amount: i128,
+    pub remaining: i128,
+    pub partial: bool,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Refunded {
+    #[topic]
+    pub event_id: u64,
+    #[topic]
+    pub ticket_id: u64,
+    pub owner: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaid {
+    #[topic]
+    pub event_id: u64,
+    #[topic]
+    pub ticket_id: u64,
+    pub amount: i128,
+}
+
 // ---- contract -------------------------------------------------------------------
 
 #[contract]
@@ -364,6 +441,9 @@ impl EventTicket {
 
     /// Create an event with a default tier (`price`, `capacity`).
     /// `splits` share the post-fee proceeds and must sum to exactly 10 000 bps.
+    /// Organizer proceeds stay in escrow until `complete_event` + `release_payout`.
+    /// `ends_at` is unix time; 0 means the event may be completed immediately.
+    /// `royalty_bps` is the organizer share of each resale, capped at `MAX_ROYALTY_BPS`.
     #[allow(clippy::too_many_arguments)]
     pub fn create_event(
         env: Env,
@@ -374,6 +454,8 @@ impl EventTicket {
         resale_cap: i128,
         splits: Vec<Split>,
         metadata_hash: BytesN<32>,
+        ends_at: u64,
+        royalty_bps: u32,
     ) -> Result<u64, Error> {
         organizer.require_auth();
         let config = load_config(&env);
@@ -387,6 +469,9 @@ impl EventTicket {
         }
         if price < 0 || resale_cap < 0 {
             return Err(Error::InvalidAmount);
+        }
+        if royalty_bps > MAX_ROYALTY_BPS {
+            return Err(Error::RoyaltyTooHigh);
         }
         validate_splits(&splits)?;
 
@@ -403,6 +488,13 @@ impl EventTicket {
             max_transfers,
             resale_cap,
             fee_bps: config.fee_bps,
+            royalty_bps,
+            ends_at,
+            status: EventStatus::Live,
+            min_checkins_partial: 0,
+            partial_release_bps: 0,
+            partial_released: false,
+            payout_released: false,
             splits,
             tiers,
             sales_open: true,
@@ -417,6 +509,7 @@ impl EventTicket {
     /// Add a ticket tier (e.g. VIP). Tier capacity is bounded by the event-wide capacity.
     pub fn add_tier(env: Env, event_id: u64, price: i128, capacity: u32) -> Result<u32, Error> {
         let mut event = load_event(&env, event_id)?;
+        require_live(&event)?;
         event.organizer.require_auth();
         if event.tiers.len() >= MAX_TIERS {
             return Err(Error::TooManyTiers);
@@ -444,6 +537,7 @@ impl EventTicket {
         sales_open: bool,
     ) -> Result<(), Error> {
         let mut event = load_event(&env, event_id)?;
+        require_live(&event)?;
         event.organizer.require_auth();
         if capacity == 0 || capacity < event.sold {
             return Err(Error::InvalidCapacity);
@@ -474,6 +568,141 @@ impl EventTicket {
         Ok(())
     }
 
+    /// Configure an optional partial payout while the event is still Live: once
+    /// `min_checkins` attendees have checked in, `release_payout` may send
+    /// `partial_release_bps` of the current escrow to `splits`.
+    pub fn set_payout_milestone(
+        env: Env,
+        caller: Address,
+        event_id: u64,
+        min_checkins: u32,
+        partial_release_bps: u32,
+    ) -> Result<(), Error> {
+        let mut event = load_event(&env, event_id)?;
+        require_manager(&env, &caller, &event)?;
+        require_live(&event)?;
+        if event.partial_released || event.payout_released {
+            return Err(Error::AlreadyReleased);
+        }
+        if partial_release_bps > BPS_DENOMINATOR as u32 {
+            return Err(Error::InvalidAmount);
+        }
+        event.min_checkins_partial = min_checkins;
+        event.partial_release_bps = partial_release_bps;
+        save_event(&env, event_id, &event);
+        Ok(())
+    }
+
+    /// Organizer or admin marks the event finished. Requires ledger time >= `ends_at`
+    /// (or `ends_at == 0`). Unlocks the full escrow for `release_payout`.
+    pub fn complete_event(env: Env, caller: Address, event_id: u64) -> Result<(), Error> {
+        let mut event = load_event(&env, event_id)?;
+        require_manager(&env, &caller, &event)?;
+        require_live(&event)?;
+        if event.ends_at > 0 && env.ledger().timestamp() < event.ends_at {
+            return Err(Error::TooEarly);
+        }
+        event.status = EventStatus::Completed;
+        event.sales_open = false;
+        save_event(&env, event_id, &event);
+        Ok(())
+    }
+
+    /// Organizer or admin cancels a live event. Sales stop; holders may `claim_refund`.
+    /// Cannot cancel after any escrow has been released.
+    pub fn cancel_event(env: Env, caller: Address, event_id: u64) -> Result<(), Error> {
+        let mut event = load_event(&env, event_id)?;
+        require_manager(&env, &caller, &event)?;
+        require_live(&event)?;
+        if event.partial_released || event.payout_released {
+            return Err(Error::AlreadyReleased);
+        }
+        event.status = EventStatus::Cancelled;
+        event.sales_open = false;
+        save_event(&env, event_id, &event);
+        Ok(())
+    }
+
+    /// Pay escrowed organizer funds to `event.splits`. Full remaining balance after
+    /// `complete_event`; optional partial share while Live if the check-in milestone is met.
+    pub fn release_payout(env: Env, caller: Address, event_id: u64) -> Result<i128, Error> {
+        let mut event = load_event(&env, event_id)?;
+        require_manager(&env, &caller, &event)?;
+        if event.status == EventStatus::Cancelled {
+            return Err(Error::EventCancelled);
+        }
+        if event.payout_released {
+            return Err(Error::AlreadyReleased);
+        }
+
+        let escrow = load_escrow(&env, event_id);
+        let (amount, partial) = if event.status == EventStatus::Completed {
+            (escrow, false)
+        } else if event.partial_released {
+            return Err(Error::AlreadyReleased);
+        } else if event.min_checkins_partial > 0 && event.partial_release_bps > 0 {
+            if event.checked_in < event.min_checkins_partial {
+                return Err(Error::MilestoneNotMet);
+            }
+            let part = escrow * event.partial_release_bps as i128 / BPS_DENOMINATOR;
+            (part, true)
+        } else {
+            return Err(Error::EventNotCompleted);
+        };
+
+        if amount <= 0 {
+            return Err(Error::NothingToRelease);
+        }
+
+        let config = load_config(&env);
+        pay_splits_from_contract(&env, &config, &event.splits, amount);
+        let remaining = escrow - amount;
+        save_escrow(&env, event_id, remaining);
+        if partial {
+            event.partial_released = true;
+        } else {
+            event.payout_released = true;
+        }
+        save_event(&env, event_id, &event);
+        Released { event_id, amount, remaining, partial }.publish(&env);
+        Ok(amount)
+    }
+
+    /// Ticket holder recovers the escrowed organizer-share of their purchase after cancel.
+    pub fn claim_refund(env: Env, owner: Address, ticket_id: u64) -> Result<i128, Error> {
+        owner.require_auth();
+        let mut ticket = load_ticket(&env, ticket_id)?;
+        if ticket.owner != owner {
+            return Err(Error::NotOwner);
+        }
+        if ticket.refunded {
+            return Err(Error::AlreadyRefunded);
+        }
+        let event = load_event(&env, ticket.event_id)?;
+        if event.status != EventStatus::Cancelled {
+            return Err(Error::EventNotCancelled);
+        }
+
+        let amount = ticket.paid;
+        if amount > 0 {
+            let escrow = load_escrow(&env, ticket.event_id);
+            if amount > escrow {
+                return Err(Error::NothingToRelease);
+            }
+            let config = load_config(&env);
+            token::TokenClient::new(&env, &config.payment_token).transfer(
+                &env.current_contract_address(),
+                &owner,
+                &amount,
+            );
+            save_escrow(&env, ticket.event_id, escrow - amount);
+        }
+        ticket.refunded = true;
+        save_ticket(&env, ticket_id, &ticket);
+        Refunded { event_id: ticket.event_id, ticket_id, owner, amount }.publish(&env);
+        Ok(amount)
+    }
+
     // ---- customers --------------------------------------------------------------
 
     /// Buy a ticket. `payer` pays (wallet user, or the platform after a mobile-money
@@ -483,6 +712,7 @@ impl EventTicket {
         require_not_paused(&env)?;
         let config = load_config(&env);
         let mut event = load_event(&env, event_id)?;
+        require_live(&event)?;
         if !event.sales_open {
             return Err(Error::SalesClosed);
         }
@@ -494,7 +724,7 @@ impl EventTicket {
             return Err(Error::TierSoldOut);
         }
 
-        let platform_fee = settle_sale(&env, &config, &event, &payer, t.price);
+        let (platform_fee, escrowed) = settle_sale(&env, &config, &event, event_id, &payer, t.price);
 
         t.sold += 1;
         event.tiers.set(tier, t.clone());
@@ -503,7 +733,16 @@ impl EventTicket {
 
         let ticket_id: u64 = env.storage().instance().get(&DataKey::NextTicketId).unwrap_or(1);
         env.storage().instance().set(&DataKey::NextTicketId, &(ticket_id + 1));
-        let ticket = Ticket { event_id, tier, owner: owner.clone(), transfers: 0, checked_in: false, checked_in_at: 0 };
+        let ticket = Ticket {
+            event_id,
+            tier,
+            owner: owner.clone(),
+            transfers: 0,
+            checked_in: false,
+            checked_in_at: 0,
+            paid: escrowed,
+            refunded: false,
+        };
         save_ticket(&env, ticket_id, &ticket);
 
         let points = t.price * config.purchase_points_per_unit / TOKEN_UNIT;
@@ -536,7 +775,11 @@ impl EventTicket {
         if ticket.checked_in {
             return Err(Error::AlreadyCheckedIn);
         }
+        if ticket.refunded {
+            return Err(Error::AlreadyRefunded);
+        }
         let event = load_event(&env, ticket.event_id)?;
+        require_live(&event)?;
         if ticket.transfers >= event.max_transfers {
             return Err(Error::TransferLimitReached);
         }
@@ -549,7 +792,23 @@ impl EventTicket {
         if price > 0 {
             to.require_auth();
             let config = load_config(&env);
-            token::TokenClient::new(&env, &config.payment_token).transfer(&to, &from, &price);
+            let (fee, royalty, seller_amount, royalty_amounts) =
+                compute_resale(&env, price, event.fee_bps, event.royalty_bps, &event.splits);
+            let token = token::TokenClient::new(&env, &config.payment_token);
+            if fee > 0 {
+                token.transfer(&to, &config.treasury, &fee);
+            }
+            for (s, amount) in event.splits.iter().zip(royalty_amounts.iter()) {
+                if amount > 0 {
+                    token.transfer(&to, &s.recipient, &amount);
+                }
+            }
+            if seller_amount > 0 {
+                token.transfer(&to, &from, &seller_amount);
+            }
+            if royalty > 0 {
+                RoyaltyPaid { event_id: ticket.event_id, ticket_id, amount: royalty }.publish(&env);
+            }
         }
 
         ticket.owner = to.clone();
@@ -569,6 +828,12 @@ impl EventTicket {
         let config = load_config(&env);
         let mut ticket = load_ticket(&env, ticket_id)?;
         let mut event = load_event(&env, ticket.event_id)?;
+        if event.status == EventStatus::Cancelled {
+            return Err(Error::EventCancelled);
+        }
+        if ticket.refunded {
+            return Err(Error::AlreadyRefunded);
+        }
         if scanner != event.organizer {
             let key = DataKey::Scanner(ticket.event_id, scanner.clone());
             if !env.storage().persistent().has(&key) {
@@ -626,6 +891,15 @@ impl EventTicket {
         env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
     }
 
+    pub fn escrow_balance(env: Env, event_id: u64) -> Result<i128, Error> {
+        let _ = load_event(&env, event_id)?;
+        Ok(load_escrow(&env, event_id))
+    }
+
+    pub fn event_status(env: Env, event_id: u64) -> Result<EventStatus, Error> {
+        Ok(load_event(&env, event_id)?.status)
+    }
+
     /// Preview how a sale at `price` splits for `event_id`: (platform fee, per-split amounts).
     pub fn quote_split(env: Env, event_id: u64, price: i128) -> Result<(i128, Vec<i128>), Error> {
         if price < 0 {
@@ -636,7 +910,7 @@ impl EventTicket {
     }
 
     pub fn version(_env: Env) -> u32 {
-        1
+        2
     }
 }
 
@@ -672,6 +946,42 @@ fn require_not_paused(env: &Env) -> Result<(), Error> {
         return Err(Error::Paused);
     }
     Ok(())
+}
+
+fn require_live(event: &EventInfo) -> Result<(), Error> {
+    match event.status {
+        EventStatus::Live => Ok(()),
+        EventStatus::Cancelled => Err(Error::EventCancelled),
+        EventStatus::Completed => Err(Error::EventNotLive),
+    }
+}
+
+fn require_manager(env: &Env, caller: &Address, event: &EventInfo) -> Result<(), Error> {
+    caller.require_auth();
+    let config = load_config(env);
+    if *caller == event.organizer || *caller == config.admin {
+        Ok(())
+    } else {
+        Err(Error::NotEventOrganizer)
+    }
+}
+
+fn load_escrow(env: &Env, event_id: u64) -> i128 {
+    env.storage().persistent().get(&DataKey::Escrow(event_id)).unwrap_or(0)
+}
+
+fn save_escrow(env: &Env, event_id: u64, amount: i128) {
+    let key = DataKey::Escrow(event_id);
+    if amount == 0 {
+        env.storage().persistent().remove(&key);
+    } else {
+        env.storage().persistent().set(&key, &amount);
+        bump(env, &key);
+    }
+}
+
+fn add_escrow(env: &Env, event_id: u64, delta: i128) {
+    save_escrow(env, event_id, load_escrow(env, event_id) + delta);
 }
 
 fn bump(env: &Env, key: &DataKey) {
@@ -721,11 +1031,8 @@ fn validate_splits(splits: &Vec<Split>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Platform fee first, then each split's share of the remainder. Rounding dust goes to
-/// the last split so the amounts always sum to exactly `price`.
-fn compute_split(env: &Env, price: i128, fee_bps: u32, splits: &Vec<Split>) -> (i128, Vec<i128>) {
-    let fee = price * fee_bps as i128 / BPS_DENOMINATOR;
-    let net = price - fee;
+/// Split `net` across `splits`. Rounding dust goes to the last recipient.
+fn split_net(env: &Env, net: i128, splits: &Vec<Split>) -> Vec<i128> {
     let mut amounts = Vec::new(env);
     let mut paid: i128 = 0;
     let last = splits.len() - 1;
@@ -734,25 +1041,67 @@ fn compute_split(env: &Env, price: i128, fee_bps: u32, splits: &Vec<Split>) -> (
         paid += amount;
         amounts.push_back(amount);
     }
-    (fee, amounts)
+    amounts
 }
 
-/// Pull `price` from `payer` and pay treasury + split recipients. Returns the platform fee.
-fn settle_sale(env: &Env, config: &Config, event: &EventInfo, payer: &Address, price: i128) -> i128 {
+/// Platform fee first, then each split's share of the remainder. Rounding dust goes to
+/// the last split so the amounts always sum to exactly `price`.
+fn compute_split(env: &Env, price: i128, fee_bps: u32, splits: &Vec<Split>) -> (i128, Vec<i128>) {
+    let fee = price * fee_bps as i128 / BPS_DENOMINATOR;
+    (fee, split_net(env, price - fee, splits))
+}
+
+fn compute_resale(
+    env: &Env,
+    price: i128,
+    fee_bps: u32,
+    royalty_bps: u32,
+    splits: &Vec<Split>,
+) -> (i128, i128, i128, Vec<i128>) {
+    let fee = price * fee_bps as i128 / BPS_DENOMINATOR;
+    let royalty = price * royalty_bps as i128 / BPS_DENOMINATOR;
+    let seller = price - fee - royalty;
+    (fee, royalty, seller, split_net(env, royalty, splits))
+}
+
+fn pay_splits_from_contract(env: &Env, config: &Config, splits: &Vec<Split>, amount: i128) {
+    let token = token::TokenClient::new(env, &config.payment_token);
+    let from = env.current_contract_address();
+    for (s, share) in splits.iter().zip(split_net(env, amount, splits).iter()) {
+        if share > 0 {
+            token.transfer(&from, &s.recipient, &share);
+        }
+    }
+}
+
+/// Pull `price` from `payer`: platform fee to treasury, organizer net into contract escrow.
+/// Returns `(platform_fee, escrowed_net)`.
+fn settle_sale(
+    env: &Env,
+    config: &Config,
+    event: &EventInfo,
+    event_id: u64,
+    payer: &Address,
+    price: i128,
+) -> (i128, i128) {
     if price == 0 {
-        return 0;
+        return (0, 0);
     }
     let (fee, amounts) = compute_split(env, price, event.fee_bps, &event.splits);
+    let mut net: i128 = 0;
+    for amount in amounts.iter() {
+        net += amount;
+    }
     let token = token::TokenClient::new(env, &config.payment_token);
     if fee > 0 {
         token.transfer(payer, &config.treasury, &fee);
     }
-    for (s, amount) in event.splits.iter().zip(amounts.iter()) {
-        if amount > 0 {
-            token.transfer(payer, &s.recipient, &amount);
-        }
+    if net > 0 {
+        token.transfer(payer, &env.current_contract_address(), &net);
+        add_escrow(env, event_id, net);
+        Escrowed { event_id, amount: net, payer: payer.clone() }.publish(env);
     }
-    fee
+    (fee, net)
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against the contracts in contracts/deployments/testnet.json:
-# approve organizer -> create event -> buy ticket (USDC split) -> check in -> replay rejected
-# -> points + badge awarded. Uses throwaway `by-smoke-*` identities.
+# approve organizer -> create event -> buy ticket (fee to treasury, net escrowed) -> complete
+# + release payout -> check in -> replay rejected -> points + badge awarded.
+# Uses throwaway `by-smoke-*` identities. Requires event_ticket v2 on testnet.
 #
 #   npm run contracts:smoke
 set -euo pipefail
@@ -52,7 +53,8 @@ call "$DEPLOYER" "$TIX" approve_organizer --organizer "$ORG" >/dev/null
 EVENT_ID=$(call by-smoke-organizer "$TIX" create_event \
   --organizer "$ORG" --capacity 100 --price 1000000000 --max_transfers 1 --resale_cap 1200000000 \
   --splits "[{\"recipient\":\"$ORG\",\"bps\":7000},{\"recipient\":\"$ARTIST\",\"bps\":3000}]" \
-  --metadata_hash "$(printf 'by-smoke-%s' "$(date +%s)" | sha256sum | cut -d' ' -f1)" | unquote)
+  --metadata_hash "$(printf 'by-smoke-%s' "$(date +%s)" | sha256sum | cut -d' ' -f1)" \
+  --ends_at 0 --royalty_bps 0 | unquote)
 echo "event_id: $EVENT_ID"
 call by-smoke-organizer "$TIX" set_scanner --event_id "$EVENT_ID" --scanner "$SCANNER" --enabled true >/dev/null
 
@@ -63,9 +65,19 @@ echo "ticket_id: $TICKET_ID"
 dT=$(( $(view "$USDC" balance --id "$TREASURY" | unquote) - T0 ))
 dO=$(( $(view "$USDC" balance --id "$ORG" | unquote) - O0 ))
 dA=$(( $(view "$USDC" balance --id "$ARTIST" | unquote) - A0 ))
+ESCROW=$(view "$TIX" escrow_balance --event_id "$EVENT_ID" | unquote)
 [ "$dT" = 25000000 ] && pass "platform fee 2.5 USDC" || fail "platform fee: $dT"
-[ "$dO" = 682500000 ] && pass "organizer 68.25 USDC" || fail "organizer: $dO"
-[ "$dA" = 292500000 ] && pass "artist 29.25 USDC" || fail "artist: $dA"
+[ "$dO" = 0 ] && pass "organizer unpaid until release" || fail "organizer before release: $dO"
+[ "$dA" = 0 ] && pass "artist unpaid until release" || fail "artist before release: $dA"
+[ "$ESCROW" = 975000000 ] && pass "escrow 97.5 USDC" || fail "escrow: $ESCROW"
+
+log "Complete event and release escrow"
+call by-smoke-organizer "$TIX" complete_event --caller "$ORG" --event_id "$EVENT_ID" >/dev/null
+call by-smoke-organizer "$TIX" release_payout --caller "$ORG" --event_id "$EVENT_ID" >/dev/null
+dO=$(( $(view "$USDC" balance --id "$ORG" | unquote) - O0 ))
+dA=$(( $(view "$USDC" balance --id "$ARTIST" | unquote) - A0 ))
+[ "$dO" = 682500000 ] && pass "organizer 68.25 USDC after release" || fail "organizer: $dO"
+[ "$dA" = 292500000 ] && pass "artist 29.25 USDC after release" || fail "artist: $dA"
 
 log "Check in at the door"
 BADGE_ID=$(call by-smoke-scanner "$TIX" validate_and_check_in --ticket_id "$TICKET_ID" --scanner "$SCANNER" | unquote)

@@ -120,10 +120,11 @@ Separating payer from owner lets the platform account pay on-chain after an off-
 settles, and lets users buy tickets for friends. Purchase points go to the owner.
 
 ### D-019 Paid resale settles on-chain
-`transfer_ticket(…, price)` with `price > 0` requires the buyer's auth and moves the payment token buyer → seller
-in the same call, so the resale cap is enforced on the actual payment rather than a self-reported number.
+`transfer_ticket(…, price)` with `price > 0` requires the buyer's auth and splits the payment in the same call:
+platform `fee_bps` → treasury, organizer `royalty_bps` (capped at 15 %, snapshot at `create_event`) → `splits`,
+remainder → seller. The resale cap is enforced on the actual payment rather than a self-reported number.
 Off-chain side payments can't be prevented by any ticketing system; the transfer limit bounds them.
-No resale royalty yet (ROADMAP: secondary marketplace).
+Supersedes the earlier "no royalty" note; see D-036.
 
 ### D-020 Fee snapshot per event; pause doesn't block check-in
 Each event stores the platform `fee_bps` at creation so a later fee change never alters an organizer's agreed
@@ -239,3 +240,11 @@ is signed in. If it isn't, the server creates an Auth user with a never-delivera
 email (confirmed immediately; no mail is sent), inserts the wallet as `kind=freighter`, then establishes a
 Supabase session with `generateLink` + `verifyOtp`. Email OTP sign-in stays. The same wallet cannot belong to two
 accounts.
+
+### D-036 Ticketing escrow, milestone payout, refunds
+Primary sales still pay the platform fee to the treasury immediately. The organizer/artist share is held in
+the `event_ticket` contract per event until `complete_event` (organizer or admin, after `ends_at`) plus
+`release_payout`. An optional `set_payout_milestone` can release a percentage after a minimum check-in count
+while the event is still Live. `cancel_event` blocks payouts; holders `claim_refund` the escrowed net (not
+the fee). `version()` is 2. The web UI is unchanged; only Stellar bindings/types were updated. Redeploy is
+required before testnet has these functions.
